@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import connectDB from "./config/db.js";
 import authRoutes from "./routes/authRoute.js";
+import aiRoutes from "./routes/aiRoute.js";
 
 dotenv.config();
 
@@ -13,6 +14,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use("/api/auth", authRoutes);
+app.use("/api/ai", aiRoutes);
+
 app.get("/", (req, res) => {
   res.send("SircuS API is running smoothly...");
 });
