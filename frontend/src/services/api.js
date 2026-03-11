@@ -2,7 +2,7 @@ import axios from "axios";
 
 // Check if we are in dev or prod based on Vite's environment variables
 const API_URL =
-  import.meta.env.MODE === "dev"
+  import.meta.env.MODE === "development"
     ? "http://localhost:5000/api"
     : "https://your-production-url.com/api";
 
