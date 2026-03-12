@@ -4,12 +4,12 @@ import { useDatabase } from "../hooks/useDatabase";
 import SqlEditor from "../components/SqlEditor";
 import { Play, Loader2, AlertCircle, CloudCheck } from "lucide-react";
 import ResultsTable from "../components/ResultsTable";
-import DatabaseExplorer from "../components/DatabaseExplorer";
+import ChartVisualizer from "../components/ChartVisualizer";
 import api from "../services/api";
+import DatabaseExplorer from "../components/DatabaseExplorer";
 
 const Workspace = () => {
   // 1. Consume Shared Database & Editor State from Context
-  // We extract BOTH the UI states (query) and the Engine states (databases)
   const {
     isReady,
     isExecuting,
@@ -26,6 +26,7 @@ const Workspace = () => {
   } = useDatabase();
 
   const [saveStatus, setSaveStatus] = useState("Synced"); // 'Synced', 'Saving', or 'Error'
+  const [viewMode, setViewMode] = useState("table");
 
   // 2. Load saved workspace from cloud on mount
   useEffect(() => {
@@ -81,7 +82,7 @@ const Workspace = () => {
 
   return (
     <div className="flex h-full bg-zinc-950 text-zinc-300 overflow-hidden">
-      {/* LEFT SIDEBAR: Database Explorer (Your Feature!) */}
+      {/* LEFT SIDEBAR: Database Explorer */}
       <div className="w-72 border-r border-zinc-800 bg-zinc-900 p-0 overflow-hidden flex flex-col">
         <DatabaseExplorer
           schema={schema}
@@ -93,7 +94,7 @@ const Workspace = () => {
         />
       </div>
 
-      {/* RIGHT MAIN AREA: Editor & Results (Friend's beautiful styling) */}
+      {/* RIGHT MAIN AREA: Editor & Results */}
       <div className="flex-1 flex flex-col p-4 space-y-4 overflow-hidden">
         {/* Top Half: Editor & Controls */}
         <div className="h-1/2 flex flex-col space-y-2">
@@ -155,14 +156,42 @@ const Workspace = () => {
 
         {/* Bottom Half: Results Panel */}
         <div className="h-1/2 flex flex-col space-y-2">
-          <h2 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
-            Results
-            {results && (
-              <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-1 rounded-full font-bold">
-                {results.values.length} rows
-              </span>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
+              Results
+              {results && (
+                <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-1 rounded-full font-bold">
+                  {results.values.length} rows
+                </span>
+              )}
+            </h2>
+
+            {/* View Mode Toggles */}
+            {results && !error && (
+              <div className="flex bg-zinc-900 border border-zinc-800 rounded-lg p-1 space-x-1">
+                <button
+                  onClick={() => setViewMode("table")}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                    viewMode === "table"
+                      ? "bg-zinc-700 text-white shadow-sm"
+                      : "text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  Table
+                </button>
+                <button
+                  onClick={() => setViewMode("chart")}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                    viewMode === "chart"
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  Chart
+                </button>
+              </div>
             )}
-          </h2>
+          </div>
 
           <div className="flex-1 overflow-hidden relative">
             {error ? (
@@ -182,7 +211,11 @@ const Workspace = () => {
                   rows.
                 </p>
                 <div className="flex-1 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/30">
-                  <ResultsTable results={results} />
+                  {viewMode === "table" ? (
+                    <ResultsTable results={results} />
+                  ) : (
+                    <ChartVisualizer results={results} />
+                  )}
                 </div>
               </div>
             ) : (
@@ -203,3 +236,4 @@ const Workspace = () => {
 };
 
 export default Workspace;
+
