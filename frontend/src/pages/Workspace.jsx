@@ -13,6 +13,8 @@ import {
 import ResultsTable from "../components/ResultsTable";
 import CsvUploader from "../components/CsvUploader";
 import AiMockDataButton from "../components/AiMockDataButton";
+import AiQueryGenerator from "../components/AiQueryGenerator";
+import ChartVisualizer from "../components/ChartVisualizer";
 import api from "../services/api"; // Ensure this points to your axios instance
 
 const Workspace = () => {
@@ -30,6 +32,9 @@ const Workspace = () => {
   // 2. State to hold the SQL code in the editor
   const [query, setQuery] = useState("");
   const [saveStatus, setSaveStatus] = useState("Synced"); // 'Synced', 'Saving', or 'Error'
+
+  // View Mode: Result Table or Chart
+  const [viewMode, setViewMode] = useState("table");
 
   // 3. PHASE 4: Load saved workspace from MongoDB on mount
   useEffect(() => {
@@ -112,6 +117,11 @@ const Workspace = () => {
               onExecuteSql={executeSql}
             />
           </div>
+
+          <AiQueryGenerator 
+            currentSchema={dummySchema}
+            onQueryGenerated={(sql) => setQuery(sql)}
+          />
         </div>
       </div>
 
@@ -174,7 +184,34 @@ const Workspace = () => {
 
         {/* Bottom Half: Results Panel */}
         <div className="h-1/2 flex flex-col space-y-2">
-          <h2 className="text-lg font-semibold text-zinc-100">Results</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-zinc-100">Results</h2>
+            {/* View Mode Toggles */}
+            {results && !error && (
+              <div className="flex bg-zinc-900 border border-zinc-800 rounded-lg p-1 space-x-1">
+                <button
+                  onClick={() => setViewMode("table")}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                    viewMode === "table"
+                      ? "bg-zinc-700 text-white shadow-sm"
+                      : "text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  Table
+                </button>
+                <button
+                  onClick={() => setViewMode("chart")}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                    viewMode === "chart"
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  Chart
+                </button>
+              </div>
+            )}
+          </div>
 
           <div className="flex-1 overflow-hidden">
             {error ? (
@@ -184,15 +221,17 @@ const Workspace = () => {
               </div>
             ) : results ? (
               <div className="h-full flex flex-col space-y-2">
-                <p className="text-emerald-400 text-sm font-medium">
-                  Query executed successfully. Returned {results.values.length}{" "}
-                  rows.
-                </p>
-                <p className="text-green-400 text-xs font-medium uppercase tracking-tight">
-                  Success: Returned {results.values.length} rows.
-                </p>
+                <div className="flex justify-between items-end">
+                  <p className="text-emerald-400 text-sm font-medium">
+                    Query executed successfully. Returned {results.values.length} rows.
+                  </p>
+                </div>
                 <div className="flex-1 overflow-hidden rounded-lg border border-gray-800">
-                  <ResultsTable results={results} />
+                  {viewMode === "table" ? (
+                    <ResultsTable results={results} />
+                  ) : (
+                    <ChartVisualizer results={results} />
+                  )}
                 </div>
               </div>
             ) : (
