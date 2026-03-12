@@ -11,6 +11,17 @@ export default function DatabaseExplorer({
   const [newDbName, setNewDbName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
+  // NEW: State to track which tables are expanded (showing columns)
+  const [expandedTables, setExpandedTables] = useState({});
+
+  // NEW: Function to toggle a table's expanded state
+  const toggleTable = (tableName) => {
+    setExpandedTables((prev) => ({
+      ...prev,
+      [tableName]: !prev[tableName],
+    }));
+  };
+
   // Handle creating a new database
   const handleCreateDb = (e) => {
     e.preventDefault();
@@ -24,7 +35,6 @@ export default function DatabaseExplorer({
   // Handle deleting the current database
   const handleDelete = () => {
     if (!activeDb) return;
-    // Add a confirmation so users don't accidentally wipe their data!
     if (
       window.confirm(
         `Are you sure you want to permanently delete '${activeDb}'? This cannot be undone.`,
@@ -109,28 +119,43 @@ export default function DatabaseExplorer({
             No tables in {activeDb}.
           </p>
         ) : (
-          <ul className="space-y-4">
+          <ul className="space-y-3">
             {schema.map((table) => (
               <li key={table.tableName} className="flex flex-col">
-                <button
-                  onClick={() => onTableClick(table.tableName)}
-                  className="flex items-center text-blue-400 hover:text-blue-300 font-semibold mb-1 transition-colors text-left"
-                >
-                  <span className="mr-2">🗄️</span> {table.tableName}
-                </button>
-                <ul className="pl-6 space-y-1 border-l border-zinc-800 ml-2 mt-1">
-                  {table.columns.map((col) => (
-                    <li
-                      key={col.name}
-                      className="flex justify-between text-zinc-400 text-xs"
-                    >
-                      <span>{col.name}</span>
-                      <span className="text-zinc-600 font-mono">
-                        {col.type}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                <div className="flex items-center w-full">
+                  {/* The new Expand/Collapse Arrow Button */}
+                  <button
+                    onClick={() => toggleTable(table.tableName)}
+                    className="w-5 flex justify-center text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors mr-1"
+                  >
+                    {expandedTables[table.tableName] ? "▼" : "▶"}
+                  </button>
+
+                  {/* The original table click button (still injects the SELECT query) */}
+                  <button
+                    onClick={() => onTableClick(table.tableName)}
+                    className="flex items-center text-blue-400 hover:text-blue-300 font-semibold transition-colors text-left flex-1"
+                  >
+                    <span className="mr-1.5">🗄️</span> {table.tableName}
+                  </button>
+                </div>
+
+                {/* Only render the columns if this specific table is expanded */}
+                {expandedTables[table.tableName] && (
+                  <ul className="pl-6 space-y-1 border-l border-zinc-800 ml-2.5 mt-1.5 mb-1">
+                    {table.columns.map((col) => (
+                      <li
+                        key={col.name}
+                        className="flex justify-between text-zinc-400 text-xs"
+                      >
+                        <span>{col.name}</span>
+                        <span className="text-zinc-600 font-mono">
+                          {col.type}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </li>
             ))}
           </ul>
