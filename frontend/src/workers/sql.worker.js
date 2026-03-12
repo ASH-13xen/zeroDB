@@ -121,7 +121,7 @@ async function loadDatabase(dbName) {
 loadDatabase("test.sqlite");
 
 self.onmessage = async (event) => {
-  const { action, sql, dbName } = event.data;
+  const { action, sql, dbName, isPlan } = event.data;
 
   // NEW ACTION: Switch or Create DB
   if (action === "SWITCH_DB") {
@@ -135,22 +135,31 @@ self.onmessage = async (event) => {
 
       if (activeDbName === targetDb) {
         // 1. CRITICAL FIX: Destroy it in memory FIRST!
-        // Otherwise, loadDatabase will auto-save the deleted DB back to disk.
         if (db) {
           db.close();
           db = null;
         }
 
-        // 2. Remove the physical file
-        await root.removeEntry(targetDb);
-        console.log(`🗑️ Deleted active DB: ${targetDb}`);
+        // 2. Safely remove the physical file if it exists
+        try {
+          await root.removeEntry(targetDb);
+          console.log(`🗑️ Deleted active DB file: ${targetDb}`);
+        } catch (e) {
+          if (e.name !== 'NotFoundError') throw e;
+          console.log(`ℹ️ Active DB ${targetDb} was memory-only, no file to delete.`);
+        }
 
         // 3. Now load the fallback safely
         await loadDatabase("test.sqlite");
       } else {
-        // Deleting a background database is easy, just remove the file
-        await root.removeEntry(targetDb);
-        console.log(`🗑️ Deleted background DB: ${targetDb}`);
+        // Deleting a background database
+        try {
+          await root.removeEntry(targetDb);
+          console.log(`🗑️ Deleted background DB: ${targetDb}`);
+        } catch (e) {
+          if (e.name !== 'NotFoundError') throw e;
+          console.log(`ℹ️ Background DB ${targetDb} file not found.`);
+        }
         await broadcastSchema();
       }
     } catch (error) {
@@ -175,9 +184,10 @@ self.onmessage = async (event) => {
       postMessage({
         type: "QUERY_SUCCESS",
         result: result[0] ? result[0] : { columns: [], values: [] },
+        isPlan,
       });
     } catch (error) {
-      postMessage({ type: "QUERY_ERROR", error: error.message });
+      postMessage({ type: "QUERY_ERROR", error: error.message, isPlan });
     }
   }
 };

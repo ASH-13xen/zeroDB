@@ -18,3 +18,34 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #52525b; /* zinc-600 */
 }
+
+:root {
+  background-color: #09090b;
+}
+
+body {
+  margin: 0;
+  background-color: #09090b;
+  overflow: hidden; /* Prevent page scroll */
+}
+
+#root {
+  height: 100vh;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
