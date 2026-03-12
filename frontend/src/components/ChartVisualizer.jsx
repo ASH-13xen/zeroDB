@@ -165,7 +165,7 @@ const ChartVisualizer = ({ results }) => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden shrink-0">
+    <div className="flex flex-col h-full bg-zinc-900 border border-zinc-800 rounded-lg overflow-auto shrink-0">
       {/* Chart Controls */}
       <div className="flex flex-wrap items-center gap-4 p-4 border-b border-zinc-800 bg-zinc-950">
         

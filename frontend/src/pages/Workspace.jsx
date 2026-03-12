@@ -1,6 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useEffect } from "react";
 import { useDatabase } from "../hooks/useDatabase";
 import SqlEditor from "../components/SqlEditor";
 import {
@@ -23,10 +22,7 @@ const Workspace = () => {
 
   // 2. Friend's Editor State
 
-  // 3. Our Phase 2 Temporary Schema State
-  const [dummySchema, setDummySchema] = useState(
-    "CREATE TABLE Users (id INTEGER, name VARCHAR, email VARCHAR);",
-  );
+  // 3. (Removed hardcoded dummy schema)
 
   // 4. Friend's Run Query Handler
   // 2. State to hold the SQL code in the editor
@@ -35,6 +31,49 @@ const Workspace = () => {
 
   // View Mode: Result Table or Chart
   const [viewMode, setViewMode] = useState("table");
+
+  // Resizing State
+  const [sidebarWidth, setSidebarWidth] = useState(288);
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+  const [editorHeight, setEditorHeight] = useState(50);
+  const [isResizingEditor, setIsResizingEditor] = useState(false);
+  const rightPanelRef = useRef(null);
+
+  useEffect(() => {
+    if (!isResizingSidebar) return;
+    const handleMouseMove = (e) => {
+      const newWidth = Math.max(200, Math.min(e.clientX, 800));
+      setSidebarWidth(newWidth);
+    };
+    const handleMouseUp = () => setIsResizingSidebar(false);
+    
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizingSidebar]);
+
+  useEffect(() => {
+    if (!isResizingEditor) return;
+    const handleMouseMove = (e) => {
+      if (!rightPanelRef.current) return;
+      const rect = rightPanelRef.current.getBoundingClientRect();
+      const relativeY = e.clientY - rect.top;
+      const percentage = (relativeY / rect.height) * 100;
+      const newHeight = Math.max(20, Math.min(percentage, 80));
+      setEditorHeight(newHeight);
+    };
+    const handleMouseUp = () => setIsResizingEditor(false);
+    
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizingEditor]);
 
   // 3. PHASE 4: Load saved workspace from MongoDB on mount
   useEffect(() => {
@@ -87,9 +126,12 @@ const Workspace = () => {
   };
 
   return (
-    <div className="flex h-full bg-zinc-950 text-zinc-300 overflow-hidden">
+    <div className={`flex h-full bg-zinc-950 text-zinc-300 overflow-hidden ${isResizingSidebar || isResizingEditor ? "select-none" : ""}`}>
       {/* LEFT SIDEBAR: Our Phase 2 & 3 Components */}
-      <div className="w-72 border-r border-zinc-800 bg-zinc-900 p-4 overflow-y-auto flex flex-col gap-6">
+      <div 
+        className="bg-zinc-900 p-4 overflow-y-auto flex flex-col gap-6 flex-shrink-0"
+        style={{ width: `${sidebarWidth}px` }}
+      >
         <div>
           <h2 className="text-sm font-bold text-zinc-500 uppercase tracking-wider mb-4">
             Ingestion
@@ -103,32 +145,38 @@ const Workspace = () => {
             AI Data
           </h2>
           <div className="p-4 border border-zinc-700/50 bg-zinc-900/50 rounded-xl mb-2">
-            <label className="text-xs text-zinc-400 mb-1 block">
-              Current Schema (Test)
+            <label className="text-xs text-zinc-400 mb-3 block whitespace-normal">
+              Define your table schema in the main SQL Editor first, then click below.
             </label>
-            <textarea
-              value={dummySchema}
-              onChange={(e) => setDummySchema(e.target.value)}
-              className="w-full h-24 bg-zinc-950 border border-zinc-800 rounded p-2 text-xs font-mono text-emerald-400 mb-3"
-            />
             {/* Passing the real executeSql from useDatabase! */}
             <AiMockDataButton
-              currentSchema={dummySchema}
+              currentSchema={query}
               onExecuteSql={executeSql}
             />
           </div>
 
           <AiQueryGenerator 
-            currentSchema={dummySchema}
+            currentSchema={query}
             onQueryGenerated={(sql) => setQuery(sql)}
           />
         </div>
       </div>
 
+      {/* Vertical Resizer */}
+      <div
+        className="w-2 cursor-col-resize flex-shrink-0 z-10 flex justify-center group"
+        onMouseDown={() => setIsResizingSidebar(true)}
+      >
+        <div className="w-0.5 h-full bg-zinc-800 group-hover:bg-blue-500 transition-colors" />
+      </div>
+
       {/* RIGHT MAIN AREA: Friend's Phase 1 Components */}
-      <div className="flex-1 flex flex-col p-4 space-y-4 overflow-hidden">
+      <div ref={rightPanelRef} className="flex-1 flex flex-col overflow-hidden">
         {/* Top Half: Editor & Controls */}
-        <div className="h-1/2 flex flex-col space-y-2">
+        <div 
+          className="flex flex-col space-y-2 p-4 pb-2"
+          style={{ flexBasis: `${editorHeight}%`, height: `${editorHeight}%`, flexShrink: 0 }}
+        >
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-4">
               <h2 className="text-lg font-semibold flex items-center space-x-2">
@@ -182,8 +230,16 @@ const Workspace = () => {
           <SqlEditor value={query} onChange={setQuery} />
         </div>
 
+        {/* Horizontal Resizer */}
+        <div
+          className="h-2 cursor-row-resize flex-shrink-0 z-10 flex flex-col justify-center group"
+          onMouseDown={() => setIsResizingEditor(true)}
+        >
+          <div className="w-full h-0.5 bg-zinc-800 group-hover:bg-blue-500 transition-colors" />
+        </div>
+
         {/* Bottom Half: Results Panel */}
-        <div className="h-1/2 flex flex-col space-y-2">
+        <div className="flex-1 flex flex-col space-y-2 p-4 pt-2 overflow-auto">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-zinc-100">Results</h2>
             {/* View Mode Toggles */}
