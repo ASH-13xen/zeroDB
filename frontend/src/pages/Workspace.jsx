@@ -1,32 +1,33 @@
-import React from "react";
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useDatabase } from "../hooks/useDatabase";
 import SqlEditor from "../components/SqlEditor";
-import {
-  Play,
-  Loader2,
-  AlertCircle,
-  CloudCheck,
-} from "lucide-react";
+import { Play, Loader2, AlertCircle, CloudCheck } from "lucide-react";
 import ResultsTable from "../components/ResultsTable";
-import api from "../services/api"; // Ensure this points to your axios instance
+import DatabaseExplorer from "../components/DatabaseExplorer";
+import api from "../services/api";
 
 const Workspace = () => {
   // 1. Consume Shared Database & Editor State from Context
-  const { 
-    isReady, 
-    isExecuting, 
-    results, 
-    error, 
-    executeSql, 
-    query, 
-    setQuery 
+  // We extract BOTH the UI states (query) and the Engine states (databases)
+  const {
+    isReady,
+    isExecuting,
+    results,
+    error,
+    executeSql,
+    query,
+    setQuery,
+    schema,
+    databases,
+    activeDb,
+    switchDb,
+    deleteDb,
   } = useDatabase();
 
-  const [saveStatus, setSaveStatus] = React.useState("Synced"); // 'Synced', 'Saving', or 'Error'
+  const [saveStatus, setSaveStatus] = useState("Synced"); // 'Synced', 'Saving', or 'Error'
 
-  // 2. PHASE 4: Load saved workspace from MongoDB on mount
+  // 2. Load saved workspace from cloud on mount
   useEffect(() => {
     const loadWorkspace = async () => {
       try {
@@ -35,20 +36,20 @@ const Workspace = () => {
           setQuery(res.data.query);
         } else {
           setQuery(
-            '-- Welcome to zeroDB Edge Mode\nCREATE TABLE test (id INTEGER, name TEXT);\nINSERT INTO test VALUES (1, "Alice"), (2, "Bob");\nSELECT * FROM test;'
+            '-- Welcome to zeroDB Edge Mode\nCREATE TABLE test (id INTEGER, name TEXT);\nINSERT INTO test VALUES (1, "Alice"), (2, "Bob");\nSELECT * FROM test;',
           );
         }
       } catch (err) {
         console.error("Failed to load workspace from cloud", err);
         setQuery(
-          '-- Welcome to zeroDB Edge Mode\nSELECT "Error loading cloud data" as status;'
+          '-- Welcome to zeroDB Edge Mode\nSELECT "Error loading cloud data" as status;',
         );
       }
     };
     loadWorkspace();
   }, [setQuery]);
 
-  // 3. PHASE 4: Debounced Auto-Save Logic
+  // 3. Debounced Auto-Save Logic
   useEffect(() => {
     if (!query) return;
 
@@ -67,23 +68,41 @@ const Workspace = () => {
     return () => clearTimeout(timer);
   }, [query]);
 
-  // 4. Handle the Run button click
+  // 4. Handlers
   const handleRunQuery = () => {
     if (query.trim()) {
       executeSql(query);
     }
   };
 
+  const handleTableClick = (tableName) => {
+    setQuery(`SELECT * FROM ${tableName} LIMIT 10;`);
+  };
+
   return (
     <div className="flex h-full bg-zinc-950 text-zinc-300 overflow-hidden">
-      {/* Main IDE Area (Now Full Width) */}
+      {/* LEFT SIDEBAR: Database Explorer (Your Feature!) */}
+      <div className="w-72 border-r border-zinc-800 bg-zinc-900 p-0 overflow-hidden flex flex-col">
+        <DatabaseExplorer
+          schema={schema}
+          databases={databases || []}
+          activeDb={activeDb || "test"}
+          onSwitchDb={switchDb}
+          onTableClick={handleTableClick}
+          onDeleteDb={deleteDb}
+        />
+      </div>
+
+      {/* RIGHT MAIN AREA: Editor & Results (Friend's beautiful styling) */}
       <div className="flex-1 flex flex-col p-4 space-y-4 overflow-hidden">
         {/* Top Half: Editor & Controls */}
         <div className="h-1/2 flex flex-col space-y-2">
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-4">
               <h2 className="text-lg font-semibold flex items-center space-x-2">
-                <span className="text-zinc-100 font-bold tracking-tight">SQL Editor</span>
+                <span className="text-zinc-100 font-bold tracking-tight">
+                  SQL Editor
+                </span>
                 {!isReady ? (
                   <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded border border-yellow-500/30 font-bold uppercase">
                     Engine Booting
@@ -150,20 +169,30 @@ const Workspace = () => {
               <div className="h-full border border-rose-900/30 rounded-xl bg-rose-950/10 p-6 text-rose-400 flex items-start space-x-3">
                 <AlertCircle size={20} className="shrink-0 text-rose-500" />
                 <div className="space-y-1">
-                    <p className="font-bold text-sm">Execution Error</p>
-                    <p className="font-mono text-xs opacity-80 leading-relaxed">{error}</p>
+                  <p className="font-bold text-sm">Execution Error</p>
+                  <p className="font-mono text-xs opacity-80 leading-relaxed">
+                    {error}
+                  </p>
                 </div>
               </div>
             ) : results ? (
-              <div className="h-full flex flex-col">
+              <div className="h-full flex flex-col space-y-2">
+                <p className="text-emerald-400 text-sm font-medium px-1">
+                  Query executed successfully. Returned {results.values.length}{" "}
+                  rows.
+                </p>
                 <div className="flex-1 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/30">
                   <ResultsTable results={results} />
                 </div>
               </div>
             ) : (
               <div className="h-full border-2 border-dashed border-zinc-800/50 rounded-xl bg-zinc-900/20 flex flex-col items-center justify-center space-y-2">
-                <p className="text-zinc-500 text-sm font-medium">Ready for execution</p>
-                <p className="text-zinc-600 text-xs">Run a query, upload a CSV or use AI tools to see results</p>
+                <p className="text-zinc-500 text-sm font-medium">
+                  Ready for execution
+                </p>
+                <p className="text-zinc-600 text-xs">
+                  Run a query, click a table, or upload a CSV to see results
+                </p>
               </div>
             )}
           </div>
