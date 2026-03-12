@@ -1,50 +1,41 @@
-import React, { useState } from "react";
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useDatabase } from "../hooks/useDatabase";
 import SqlEditor from "../components/SqlEditor";
-import {
-  Play,
-  Loader2,
-  AlertCircle,
-  CloudCheck,
-  CloudUpload,
-} from "lucide-react";
+import { Play, Loader2, AlertCircle, CloudCheck } from "lucide-react";
 import ResultsTable from "../components/ResultsTable";
-import CsvUploader from "../components/CsvUploader";
-import AiMockDataButton from "../components/AiMockDataButton";
-import AiQueryGenerator from "../components/AiQueryGenerator";
 import ChartVisualizer from "../components/ChartVisualizer";
-import api from "../services/api"; // Ensure this points to your axios instance
+import api from "../services/api";
+import DatabaseExplorer from "../components/DatabaseExplorer";
 
 const Workspace = () => {
-  // 1. Friend's WebAssembly Database Hook (Our contract is fulfilled!)
-  const { isReady, isExecuting, results, error, executeSql } = useDatabase();
+  // 1. Consume Shared Database & Editor State from Context
+  const {
+    isReady,
+    isExecuting,
+    results,
+    error,
+    executeSql,
+    query,
+    setQuery,
+    schema,
+    databases,
+    activeDb,
+    switchDb,
+    deleteDb,
+  } = useDatabase();
 
-  // 2. Friend's Editor State
-
-  // 3. Our Phase 2 Temporary Schema State
-  const [dummySchema, setDummySchema] = useState(
-    "CREATE TABLE Users (id INTEGER, name VARCHAR, email VARCHAR);",
-  );
-
-  // 4. Friend's Run Query Handler
-  // 2. State to hold the SQL code in the editor
-  const [query, setQuery] = useState("");
   const [saveStatus, setSaveStatus] = useState("Synced"); // 'Synced', 'Saving', or 'Error'
-
-  // View Mode: Result Table or Chart
   const [viewMode, setViewMode] = useState("table");
 
-  // 3. PHASE 4: Load saved workspace from MongoDB on mount
+  // 2. Load saved workspace from cloud on mount
   useEffect(() => {
     const loadWorkspace = async () => {
       try {
-        const res = await api.get("/auth/workspace"); // Adjust endpoint if needed
+        const res = await api.get("/auth/workspace");
         if (res.data.success && res.data.query) {
           setQuery(res.data.query);
         } else {
-          // Default starter code if no saved query exists
           setQuery(
             '-- Welcome to zeroDB Edge Mode\nCREATE TABLE test (id INTEGER, name TEXT);\nINSERT INTO test VALUES (1, "Alice"), (2, "Bob");\nSELECT * FROM test;',
           );
@@ -57,11 +48,10 @@ const Workspace = () => {
       }
     };
     loadWorkspace();
-  }, []);
+  }, [setQuery]);
 
-  // 4. PHASE 4: Debounced Auto-Save Logic
+  // 3. Debounced Auto-Save Logic
   useEffect(() => {
-    // Don't auto-save empty queries or the initial load
     if (!query) return;
 
     setSaveStatus("Saving");
@@ -74,92 +64,72 @@ const Workspace = () => {
         console.error("Auto-save failed", err);
         setSaveStatus("Error");
       }
-    }, 1500); // 1.5 second debounce delay
+    }, 1500);
 
     return () => clearTimeout(timer);
   }, [query]);
 
-  // 5. Handle the Run button click
+  // 4. Handlers
   const handleRunQuery = () => {
     if (query.trim()) {
       executeSql(query);
     }
   };
 
+  const handleTableClick = (tableName) => {
+    setQuery(`SELECT * FROM ${tableName} LIMIT 10;`);
+  };
+
   return (
     <div className="flex h-full bg-zinc-950 text-zinc-300 overflow-hidden">
-      {/* LEFT SIDEBAR: Our Phase 2 & 3 Components */}
-      <div className="w-72 border-r border-zinc-800 bg-zinc-900 p-4 overflow-y-auto flex flex-col gap-6">
-        <div>
-          <h2 className="text-sm font-bold text-zinc-500 uppercase tracking-wider mb-4">
-            Ingestion
-          </h2>
-          {/* Passing the real executeSql from useDatabase! */}
-          <CsvUploader onExecuteSql={executeSql} />
-        </div>
-
-        <div>
-          <h2 className="text-sm font-bold text-zinc-500 uppercase tracking-wider mb-4">
-            AI Data
-          </h2>
-          <div className="p-4 border border-zinc-700/50 bg-zinc-900/50 rounded-xl mb-2">
-            <label className="text-xs text-zinc-400 mb-1 block">
-              Current Schema (Test)
-            </label>
-            <textarea
-              value={dummySchema}
-              onChange={(e) => setDummySchema(e.target.value)}
-              className="w-full h-24 bg-zinc-950 border border-zinc-800 rounded p-2 text-xs font-mono text-emerald-400 mb-3"
-            />
-            {/* Passing the real executeSql from useDatabase! */}
-            <AiMockDataButton
-              currentSchema={dummySchema}
-              onExecuteSql={executeSql}
-            />
-          </div>
-
-          <AiQueryGenerator 
-            currentSchema={dummySchema}
-            onQueryGenerated={(sql) => setQuery(sql)}
-          />
-        </div>
+      {/* LEFT SIDEBAR: Database Explorer */}
+      <div className="w-72 border-r border-zinc-800 bg-zinc-900 p-0 overflow-hidden flex flex-col">
+        <DatabaseExplorer
+          schema={schema}
+          databases={databases || []}
+          activeDb={activeDb || "test"}
+          onSwitchDb={switchDb}
+          onTableClick={handleTableClick}
+          onDeleteDb={deleteDb}
+        />
       </div>
 
-      {/* RIGHT MAIN AREA: Friend's Phase 1 Components */}
+      {/* RIGHT MAIN AREA: Editor & Results */}
       <div className="flex-1 flex flex-col p-4 space-y-4 overflow-hidden">
         {/* Top Half: Editor & Controls */}
         <div className="h-1/2 flex flex-col space-y-2">
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-4">
               <h2 className="text-lg font-semibold flex items-center space-x-2">
-                <span>SQL Editor</span>
+                <span className="text-zinc-100 font-bold tracking-tight">
+                  SQL Editor
+                </span>
                 {!isReady ? (
-                  <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded border border-yellow-500/30 uppercase">
-                    Engine Booting...
+                  <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded border border-yellow-500/30 font-bold uppercase">
+                    Engine Booting
                   </span>
                 ) : (
-                  <span className="text-[10px] bg-green-500/20 text-green-400 px-2 py-0.5 rounded border border-green-500/30 uppercase">
+                  <span className="text-[10px] bg-green-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20 font-bold uppercase">
                     Engine Ready
                   </span>
                 )}
               </h2>
 
-              {/* Cloud Sync Status Indicator */}
-              <div className="flex items-center space-x-1.5 text-xs text-gray-500 border-l border-gray-800 pl-4">
+              <div className="flex items-center space-x-1.5 text-xs text-zinc-500 border-l border-zinc-800 pl-4">
                 {saveStatus === "Saving" ? (
                   <>
-                    <Loader2 size={12} className="animate-spin" />{" "}
-                    <span>Saving to Cloud...</span>
+                    <Loader2 size={12} className="animate-spin text-blue-400" />
+                    <span>Saving...</span>
                   </>
                 ) : saveStatus === "Synced" ? (
                   <>
-                    <CloudCheck size={14} className="text-emerald-500" />{" "}
-                    <span>Saved</span>
+                    <CloudCheck size={14} className="text-emerald-500" />
+                    <span>Cloud Synced</span>
                   </>
                 ) : (
                   <>
-                    <AlertCircle size={14} className="text-red-500" />{" "}
-                    <span>Sync Error</span>
+                    <AlertCircle size={14} className="text-rose-500" />
+                    <span>Offline</span>
                   </>
                 )}
               </div>
@@ -168,7 +138,7 @@ const Workspace = () => {
             <button
               onClick={handleRunQuery}
               disabled={!isReady || isExecuting}
-              className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 px-4 py-2 rounded-md font-medium transition-all active:scale-95 shadow-lg shadow-blue-900/20"
+              className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-600 px-5 py-2.5 rounded-lg font-bold text-sm transition-all active:scale-95 shadow-xl shadow-blue-950/20 text-white"
             >
               {isExecuting ? (
                 <Loader2 size={16} className="animate-spin" />
@@ -179,13 +149,23 @@ const Workspace = () => {
             </button>
           </div>
 
-          <SqlEditor value={query} onChange={setQuery} />
+          <div className="flex-1 border border-zinc-800 rounded-xl overflow-hidden bg-zinc-900/50 shadow-inner group transition-colors hover:border-zinc-700">
+            <SqlEditor value={query} onChange={setQuery} />
+          </div>
         </div>
 
         {/* Bottom Half: Results Panel */}
         <div className="h-1/2 flex flex-col space-y-2">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-zinc-100">Results</h2>
+            <h2 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
+              Results
+              {results && (
+                <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-1 rounded-full font-bold">
+                  {results.values.length} rows
+                </span>
+              )}
+            </h2>
+
             {/* View Mode Toggles */}
             {results && !error && (
               <div className="flex bg-zinc-900 border border-zinc-800 rounded-lg p-1 space-x-1">
@@ -213,20 +193,24 @@ const Workspace = () => {
             )}
           </div>
 
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden relative">
             {error ? (
-              <div className="h-full border border-rose-900/50 rounded-lg bg-rose-900/10 p-4 text-rose-400 flex items-start space-x-2">
-                <AlertCircle size={18} className="mt-0.5 shrink-0" />
-                <p className="font-mono text-sm">{error}</p>
+              <div className="h-full border border-rose-900/30 rounded-xl bg-rose-950/10 p-6 text-rose-400 flex items-start space-x-3">
+                <AlertCircle size={20} className="shrink-0 text-rose-500" />
+                <div className="space-y-1">
+                  <p className="font-bold text-sm">Execution Error</p>
+                  <p className="font-mono text-xs opacity-80 leading-relaxed">
+                    {error}
+                  </p>
+                </div>
               </div>
             ) : results ? (
               <div className="h-full flex flex-col space-y-2">
-                <div className="flex justify-between items-end">
-                  <p className="text-emerald-400 text-sm font-medium">
-                    Query executed successfully. Returned {results.values.length} rows.
-                  </p>
-                </div>
-                <div className="flex-1 overflow-hidden rounded-lg border border-gray-800">
+                <p className="text-emerald-400 text-sm font-medium px-1">
+                  Query executed successfully. Returned {results.values.length}{" "}
+                  rows.
+                </p>
+                <div className="flex-1 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/30">
                   {viewMode === "table" ? (
                     <ResultsTable results={results} />
                   ) : (
@@ -235,9 +219,12 @@ const Workspace = () => {
                 </div>
               </div>
             ) : (
-              <div className="h-full border border-zinc-700 rounded-lg bg-zinc-900 flex items-center justify-center">
-                <p className="text-zinc-500 italic">
-                  Hit "Run Query", drag a CSV, or click "Generate Mock Data"...
+              <div className="h-full border-2 border-dashed border-zinc-800/50 rounded-xl bg-zinc-900/20 flex flex-col items-center justify-center space-y-2">
+                <p className="text-zinc-500 text-sm font-medium">
+                  Ready for execution
+                </p>
+                <p className="text-zinc-600 text-xs">
+                  Run a query, click a table, or upload a CSV to see results
                 </p>
               </div>
             )}
@@ -249,3 +236,4 @@ const Workspace = () => {
 };
 
 export default Workspace;
+
