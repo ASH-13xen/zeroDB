@@ -25,7 +25,7 @@ const ResultsTable = ({ results }) => {
       className="h-full w-full overflow-auto bg-gray-900 border border-gray-700 rounded-lg text-sm"
     >
       {/* Sticky Header */}
-      <div className="sticky top-0 z-10 bg-gray-800 border-b border-gray-700 shadow-md">
+      <div className="sticky top-0 z-10 bg-gray-800 border-b border-gray-700 shadow-md min-w-full w-fit">
         <div
           className="grid px-4 py-2 font-semibold text-gray-300"
           style={{ gridTemplateColumns }}
@@ -52,7 +52,7 @@ const ResultsTable = ({ results }) => {
           return (
             <div
               key={virtualRow.key}
-              className="absolute top-0 left-0 w-full grid px-4 py-2 border-b border-gray-800 hover:bg-gray-800/50 transition-colors"
+              className="absolute top-0 left-0 min-w-full w-fit grid px-4 py-2 border-b border-gray-800 hover:bg-gray-800/50 transition-colors"
               style={{
                 gridTemplateColumns,
                 height: `${virtualRow.size}px`,

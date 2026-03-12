@@ -23,8 +23,10 @@ export const generateMockData = async (req, res) => {
         .json({ error: "Server configuration error: Gemini API key missing." });
     }
 
+    const modelName = "gemini-2.5-flash";
+    console.log(`Using Gemini model: ${modelName}`);
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" }); // Fast and cheap model
+    const model = genAI.getGenerativeModel({ model: modelName });
 
     const prompt = `
 You are a Database Architect. I am building a Local-First, AI-Powered Browser SQL IDE.

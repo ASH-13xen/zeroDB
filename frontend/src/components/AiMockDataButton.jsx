@@ -34,6 +34,16 @@ export default function AiMockDataButton({ currentSchema, onExecuteSql }) {
             if (data.sql && onExecuteSql) {
                 // Pass the raw SQL string (expected to be ~20 INSERT statements) to the engine
                 await onExecuteSql(data.sql);
+
+                // Auto-run SELECT * to show the results immediately
+                const tableMatch = currentSchema.match(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_]+)/i);
+                if (tableMatch && tableMatch[1]) {
+                    const tableName = tableMatch[1];
+                    // Small delay to ensure the insert is processed if the worker is busy
+                    setTimeout(() => {
+                        onExecuteSql(`SELECT * FROM ${tableName} LIMIT 100;`);
+                    }, 100);
+                }
             } else {
                  throw new Error("No SQL data returned from AI");
             }
