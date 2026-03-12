@@ -7,9 +7,6 @@ import ResultsTable from "../components/ResultsTable";
 import ChartVisualizer from "../components/ChartVisualizer";
 import api from "../services/api";
 import DatabaseExplorer from "../components/DatabaseExplorer";
-import CsvUploader from "../components/CsvUploader";
-import AiMockDataButton from "../components/AiMockDataButton";
-import AiQueryGenerator from "../components/AiQueryGenerator";
 
 const Workspace = () => {
   // 1. Consume Shared Database & Editor State from Context
@@ -131,52 +128,19 @@ const Workspace = () => {
 
   return (
     <div className={`flex h-full bg-zinc-950 text-zinc-300 overflow-hidden ${isResizingSidebar || isResizingEditor ? "select-none" : ""}`}>
-      {/* LEFT SIDEBAR: Database Explorer & Our Phase 2 & 3 Components */}
+      {/* LEFT SIDEBAR: Database Explorer */}
       <div 
         className="bg-zinc-900 border-r border-zinc-800 overflow-y-auto flex flex-col flex-shrink-0"
         style={{ width: `${sidebarWidth}px` }}
       >
-        {/* Database Explorer */}
-        <div className="border-b border-zinc-800 p-0 flex flex-col shrink-0 min-h-[300px]">
-          <DatabaseExplorer
-            schema={schema}
-            databases={databases || []}
-            activeDb={activeDb || "test"}
-            onSwitchDb={switchDb}
-            onTableClick={handleTableClick}
-            onDeleteDb={deleteDb}
-          />
-        </div>
-
-        {/* Phase 2 & 3 Components */}
-        <div className="p-4 flex flex-col gap-6">
-          <div>
-            <h2 className="text-sm font-bold text-zinc-500 uppercase tracking-wider mb-4">
-              Ingestion
-            </h2>
-            <CsvUploader onExecuteSql={executeSql} />
-          </div>
-
-          <div>
-            <h2 className="text-sm font-bold text-zinc-500 uppercase tracking-wider mb-4">
-              AI Data
-            </h2>
-            <div className="p-4 border border-zinc-700/50 bg-zinc-900/50 rounded-xl mb-2">
-              <label className="text-xs text-zinc-400 mb-3 block whitespace-normal">
-                Define your table schema in the main SQL Editor first, then click below.
-              </label>
-              <AiMockDataButton
-                currentSchema={query}
-                onExecuteSql={executeSql}
-              />
-            </div>
-
-            <AiQueryGenerator 
-              currentSchema={query}
-              onQueryGenerated={(sql) => setQuery(sql)}
-            />
-          </div>
-        </div>
+        <DatabaseExplorer
+          schema={schema}
+          databases={databases || []}
+          activeDb={activeDb || "test"}
+          onSwitchDb={switchDb}
+          onTableClick={handleTableClick}
+          onDeleteDb={deleteDb}
+        />
       </div>
 
       {/* Vertical Resizer */}
