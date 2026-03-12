@@ -5,10 +5,11 @@ import { useState, useRef, useEffect } from "react";
 import { useDatabaseContext } from "../context/DatabaseContext";
 import CsvUploader from "./CsvUploader";
 import AiMockDataButton from "./AiMockDataButton";
+import AiQueryGenerator from "./AiQueryGenerator";
 
 const Navbar = () => {
   const { user, loginWithGoogle, logout } = useAuth();
-  const { executeSql, query } = useDatabaseContext();
+  const { executeSql, query, setQuery } = useDatabaseContext();
   const [isToolsOpen, setIsToolsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -56,6 +57,9 @@ const Navbar = () => {
                     <div className="border-t border-gray-800 pt-4">
                       <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">AI Generation</h3>
                       <AiMockDataButton currentSchema={query} onExecuteSql={executeSql} />
+                      <div className="mt-4">
+                        <AiQueryGenerator currentSchema={query} onQueryGenerated={(sql) => setQuery(sql)} />
+                      </div>
                     </div>
                   </div>
                 </div>
