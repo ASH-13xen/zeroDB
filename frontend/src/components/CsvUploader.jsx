@@ -25,6 +25,10 @@ export default function CsvUploader({ onExecuteSql }) {
             // Pass the raw SQL string back out to whatever function the Workspace gives us
             if (onExecuteSql) {
                 await onExecuteSql(generatedSqlString);
+                // Auto-run SELECT * to show results immediately
+                setTimeout(() => {
+                    onExecuteSql(`SELECT * FROM ${tableName} LIMIT 100;`);
+                }, 100);
             }
 
             setStatus("success");
