@@ -15,6 +15,7 @@ export const DatabaseProvider = ({ children }) => {
   const [isReady, setIsReady] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
   const [results, setResults] = useState(null);
+  const [queryPlan, setQueryPlan] = useState(null);
   const [error, setError] = useState(null);
   const [query, setQuery] = useState("");
 
@@ -41,6 +42,7 @@ export const DatabaseProvider = ({ children }) => {
         schema: newSchema,
         databases: dbList,
         activeDb: currentDb,
+        isPlan,
       } = event.data;
 
       switch (type) {
@@ -49,7 +51,11 @@ export const DatabaseProvider = ({ children }) => {
           setIsReady(true);
           break;
         case "QUERY_SUCCESS":
-          setResults(result);
+          if (isPlan) {
+            setQueryPlan(result);
+          } else {
+            setResults(result);
+          }
           setError(null);
           setIsExecuting(false);
           break;
@@ -88,6 +94,20 @@ export const DatabaseProvider = ({ children }) => {
     [isReady],
   );
 
+  const getExecutionPlan = useCallback(
+    (sqlString) => {
+      if (!workerRef.current || !isReady) return;
+      setIsExecuting(true);
+      setQueryPlan(null);
+      workerRef.current.postMessage({
+        action: "EXECUTE",
+        sql: `EXPLAIN QUERY PLAN ${sqlString}`,
+        isPlan: true,
+      });
+    },
+    [isReady],
+  );
+
   // Your new DB control functions
   const switchDb = useCallback((dbName) => {
     if (!workerRef.current) return;
@@ -108,11 +128,14 @@ export const DatabaseProvider = ({ children }) => {
         isReady,
         isExecuting,
         results,
+        queryPlan,
         error,
         executeSql,
+        getExecutionPlan,
         query,
         setQuery,
         setResults,
+        setQueryPlan,
         setError,
         // Your exposed values
         schema,

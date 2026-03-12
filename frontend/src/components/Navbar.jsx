@@ -1,16 +1,18 @@
 import { useAuth } from "../context/AuthContext";
 import { GoogleLogin } from "@react-oauth/google";
-import { Database, LogOut, Wrench, ChevronDown } from "lucide-react";
+import { Database, LogOut, Wrench, ChevronDown, Activity, ChevronRight } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useDatabaseContext } from "../context/DatabaseContext";
 import CsvUploader from "./CsvUploader";
 import AiMockDataButton from "./AiMockDataButton";
 import AiQueryGenerator from "./AiQueryGenerator";
+import QueryOptimizationModal from "./QueryOptimizationModal";
 
 const Navbar = () => {
   const { user, loginWithGoogle, logout } = useAuth();
-  const { executeSql, query, setQuery } = useDatabaseContext();
+  const { executeSql, getExecutionPlan, query, setQuery, schema, queryPlan, setQueryPlan } = useDatabaseContext();
   const [isToolsOpen, setIsToolsOpen] = useState(false);
+  const [isOptimizerOpen, setIsOptimizerOpen] = useState(false);
   const dropdownRef = useRef(null);
 
   // Close dropdown when clicking outside
@@ -48,7 +50,7 @@ const Navbar = () => {
               </button>
 
               {isToolsOpen && (
-                <div className="absolute right-0 mt-2 w-80 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-4 animate-in fade-in zoom-in duration-200 origin-top-right">
+                <div className="absolute right-0 mt-2 w-80 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-4 animate-in fade-in zoom-in duration-200 origin-top-right max-h-[calc(100vh-100px)] overflow-y-auto custom-scrollbar">
                   <div className="space-y-6">
                     <div>
                       <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Data Ingestion</h3>
@@ -58,13 +60,50 @@ const Navbar = () => {
                       <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">AI Generation</h3>
                       <AiMockDataButton currentSchema={query} onExecuteSql={executeSql} />
                       <div className="mt-4">
-                        <AiQueryGenerator currentSchema={query} onQueryGenerated={(sql) => setQuery(sql)} />
+                        <AiQueryGenerator
+                          currentSchema={query}
+                          onQueryGenerated={(sql) => {
+                            setQuery(sql);
+                            setIsToolsOpen(false); // Close dropdown after generation
+                          }}
+                        />
                       </div>
+                    </div>
+
+                    <div className="border-t border-gray-800 pt-4">
+                      <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Performance</h3>
+                      <button
+                        onClick={() => {
+                          getExecutionPlan(query);
+                          setIsOptimizerOpen(true);
+                          setIsToolsOpen(false);
+                        }}
+                        className="w-full flex items-center justify-between px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-xs font-semibold text-zinc-300 transition-colors border border-zinc-700"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Activity size={14} className="text-blue-400" />
+                          <span>Query Visualizer</span>
+                        </div>
+                        <ChevronRight size={14} className="text-zinc-600" />
+                      </button>
                     </div>
                   </div>
                 </div>
               )}
             </div>
+
+            {/* Hidden Modal Triggered from Tools */}
+            <QueryOptimizationModal
+              isOpen={isOptimizerOpen}
+              onClose={() => setIsOptimizerOpen(false)}
+              query={query}
+              schema={schema}
+              queryPlan={queryPlan}
+              onApplyOptimization={(optimizedSql) => {
+                setQuery(optimizedSql);
+                setIsOptimizerOpen(false);
+              }}
+            />
 
             <div className="h-6 w-px bg-gray-800 mx-2" />
 
