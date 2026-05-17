@@ -67,7 +67,11 @@ export const DatabaseProvider = ({ children }) => {
           } else {
             setResults(result);
             if (exTime !== undefined) setExecutionTime(exTime);
-            if (memUsage !== undefined) setMemoryUsage(memUsage);
+
+            const memUsage = window.performance && window.performance.memory
+              ? Math.round(window.performance.memory.usedJSHeapSize / 1024 / 1024)
+              : "N/A";
+            setMemoryUsage(memUsage);
 
             if (event.data.isSelectQuery && event.data.cleanSql) {
               lruCache.current.set(event.data.cleanSql, {
@@ -80,6 +84,16 @@ export const DatabaseProvider = ({ children }) => {
                 lruCache.current.delete(firstKey);
               }
             }
+
+            // Log history asynchronously
+            import("../services/api").then(({ default: api }) => {
+              api.post("/history", {
+                query: event.data.cleanSql,
+                database: activeDb || "test.sqlite",
+                executionTime: exTime || 0,
+                status: "success"
+              }).catch(err => console.warn("Failed to log local query history", err));
+            });
           }
           setError(null);
           setIsExecuting(false);
@@ -88,6 +102,18 @@ export const DatabaseProvider = ({ children }) => {
           setError(error);
           setResults(null);
           setIsExecuting(false);
+          
+          if (event.data && event.data.cleanSql) {
+            import("../services/api").then(({ default: api }) => {
+              api.post("/history", {
+                query: event.data.cleanSql,
+                database: activeDb || "test.sqlite",
+                executionTime: 0,
+                status: "error",
+                errorMessage: error
+              }).catch(err => console.warn("Failed to log local query error", err));
+            });
+          }
           break;
         // Your schema listener
         case "SCHEMA_UPDATE":
@@ -105,8 +131,31 @@ export const DatabaseProvider = ({ children }) => {
     };
   }, []);
 
-  const [executionMode, setExecutionMode] = useState("draft"); // "draft" or "production"
+  const [executionMode, setExecutionMode] = useState(() => {
+    return localStorage.getItem("zeroDB_execution_mode") || "draft";
+  }); // "draft" or "production"
   const [postgresUri, setPostgresUri] = useState("");
+  
+  useEffect(() => {
+    localStorage.setItem("zeroDB_execution_mode", executionMode);
+    
+    if (executionMode === "production") {
+      import("../services/api").then(({ default: api }) => {
+        api.get("/db/schema").then(res => {
+          setSchema(res.data.schema);
+          setDatabases(["Remote PostgreSQL"]);
+          setActiveDb("Remote PostgreSQL");
+        }).catch(err => {
+          console.error("Failed to fetch remote schema", err);
+          setSchema([]);
+          setDatabases(["Remote PostgreSQL"]);
+          setActiveDb("Remote PostgreSQL");
+        });
+      });
+    } else {
+      workerRef.current?.postMessage({ action: "BROADCAST_SCHEMA" });
+    }
+  }, [executionMode]);
   
   // LRU Cache
   const lruCache = useRef(new Map());
@@ -128,10 +177,27 @@ export const DatabaseProvider = ({ children }) => {
         lruCache.current.delete(cleanSql);
         lruCache.current.set(cleanSql, cachedData);
 
+        setError(null);
         setResults(cachedData.result);
         const fetchEndTime = performance.now();
-        setExecutionTime(parseFloat((fetchEndTime - fetchStartTime).toFixed(2)));
-        if (cachedData.memoryUsage !== undefined) setMemoryUsage(cachedData.memoryUsage);
+        const exTime = parseFloat((fetchEndTime - fetchStartTime).toFixed(2));
+        setExecutionTime(exTime);
+        
+        const memUsage = window.performance && window.performance.memory
+          ? Math.round(window.performance.memory.usedJSHeapSize / 1024 / 1024)
+          : "N/A";
+        setMemoryUsage(memUsage);
+
+        // Log cached history asynchronously
+        import("../services/api").then(({ default: api }) => {
+          api.post("/history", {
+            query: cleanSql,
+            database: activeDb || "test.sqlite",
+            executionTime: exTime,
+            status: "success"
+          }).catch(err => console.warn("Failed to log cached query history", err));
+        });
+
         return;
       }
 
@@ -152,6 +218,14 @@ export const DatabaseProvider = ({ children }) => {
           if (res.data.executionTime !== undefined) setExecutionTime(res.data.executionTime);
           if (res.data.memoryUsage !== undefined) setMemoryUsage(res.data.memoryUsage);
 
+          // Log remote query history
+          api.post("/history", {
+            query: cleanSql,
+            database: activeDb || "Remote PostgreSQL",
+            executionTime: res.data.executionTime || 0,
+            status: "success"
+          }).catch(err => console.warn("Failed to log remote query history", err));
+
           if (isSelectQuery) {
             lruCache.current.set(cleanSql, {
               result: res.data.result,
@@ -164,8 +238,20 @@ export const DatabaseProvider = ({ children }) => {
             }
           }
         } catch (err) {
-          setError(err.response?.data?.error || err.message);
+          const errMsg = err.response?.data?.error || err.message;
+          setError(errMsg);
           setResults(null);
+
+          // Log remote query error
+          import("../services/api").then(({ default: api }) => {
+            api.post("/history", {
+              query: cleanSql,
+              database: activeDb || "Remote PostgreSQL",
+              executionTime: 0,
+              status: "error",
+              errorMessage: errMsg
+            }).catch(e => console.warn("Failed to log remote query error", e));
+          });
         } finally {
           setIsExecuting(false);
         }

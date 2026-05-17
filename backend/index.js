@@ -5,6 +5,7 @@ import connectDB from "./config/db.js";
 import authRoutes from "./routes/authRoute.js";
 import aiRoutes from "./routes/aiRoute.js";
 import dbRoutes from "./routes/dbRoute.js";
+import historyRoutes from "./routes/historyRoute.js";
 
 dotenv.config();
 
@@ -17,6 +18,7 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/db", dbRoutes);
+app.use("/api/history", historyRoutes);
 
 app.get("/", (req, res) => {
   res.send("SircuS API is running smoothly...");

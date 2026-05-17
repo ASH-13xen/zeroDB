@@ -2,11 +2,12 @@ import React, { useState, useEffect, useRef } from "react";
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useDatabase } from "../hooks/useDatabase";
 import SqlEditor from "../components/SqlEditor";
-import { Play, Loader2, AlertCircle, CloudCheck } from "lucide-react";
+import { Play, Loader2, AlertCircle, CloudCheck, Database, History } from "lucide-react";
 import ResultsTable from "../components/ResultsTable";
 import ChartVisualizer from "../components/ChartVisualizer";
 import api from "../services/api";
 import DatabaseExplorer from "../components/DatabaseExplorer";
+import QueryHistory from "../components/QueryHistory";
 import { useAuth } from "../context/AuthContext";
 
 const Workspace = () => {
@@ -34,6 +35,7 @@ const Workspace = () => {
   const [saveStatus, setSaveStatus] = useState("Synced"); // 'Synced', 'Saving', or 'Error'
   const [viewMode, setViewMode] = useState("table");
   const [selectedQuery, setSelectedQuery] = useState("");
+  const [sidebarTab, setSidebarTab] = useState("explorer"); // "explorer" or "history"
 
   // Resizing State
   const [sidebarWidth, setSidebarWidth] = useState(288);
@@ -145,19 +147,52 @@ const Workspace = () => {
 
   return (
     <div className={`flex h-full bg-zinc-950 text-zinc-300 overflow-hidden ${isResizingSidebar || isResizingEditor ? "select-none" : ""}`}>
-      {/* LEFT SIDEBAR: Database Explorer */}
+      {/* LEFT SIDEBAR: Database Explorer & History Tabs */}
       <div 
-        className="bg-zinc-900 border-r border-zinc-800 overflow-y-auto flex flex-col flex-shrink-0"
+        className="bg-zinc-900 border-r border-zinc-800 flex flex-col flex-shrink-0"
         style={{ width: `${sidebarWidth}px` }}
       >
-        <DatabaseExplorer
-          schema={schema}
-          databases={databases || []}
-          activeDb={activeDb || "test"}
-          onSwitchDb={switchDb}
-          onTableClick={handleTableClick}
-          onDeleteDb={deleteDb}
-        />
+        {/* Tab Selection Headers */}
+        <div className="flex border-b border-zinc-800 bg-zinc-950 p-2 space-x-1 shrink-0">
+          <button
+            onClick={() => setSidebarTab("explorer")}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 text-xs font-semibold rounded-md transition-all ${
+              sidebarTab === "explorer"
+                ? "bg-zinc-800 text-white border border-zinc-700/50 shadow-inner"
+                : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50"
+            }`}
+          >
+            <Database size={13} />
+            <span>Explorer</span>
+          </button>
+          <button
+            onClick={() => setSidebarTab("history")}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 text-xs font-semibold rounded-md transition-all ${
+              sidebarTab === "history"
+                ? "bg-zinc-800 text-white border border-zinc-700/50 shadow-inner"
+                : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50"
+            }`}
+          >
+            <History size={13} />
+            <span>History</span>
+          </button>
+        </div>
+
+        {/* Tab Content rendering */}
+        <div className="flex-1 overflow-y-auto">
+          {sidebarTab === "explorer" ? (
+            <DatabaseExplorer
+              schema={schema}
+              databases={databases || []}
+              activeDb={activeDb || "test"}
+              onSwitchDb={switchDb}
+              onTableClick={handleTableClick}
+              onDeleteDb={deleteDb}
+            />
+          ) : (
+            <QueryHistory onQueryClick={(q) => setQuery(q)} />
+          )}
+        </div>
       </div>
 
       {/* Vertical Resizer */}

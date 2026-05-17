@@ -132,6 +132,10 @@ self.onmessage = async (event) => {
     executionCounts.clear();
     await loadDatabase(dbName);
   }
+
+  if (action === "BROADCAST_SCHEMA") {
+    await broadcastSchema();
+  }
   if (action === "DELETE_DB") {
     statementCache.clear();
     executionCounts.clear();
@@ -247,7 +251,7 @@ self.onmessage = async (event) => {
         isSelectQuery
       });
     } catch (error) {
-      postMessage({ type: "QUERY_ERROR", error: error.message || String(error), isPlan });
+      postMessage({ type: "QUERY_ERROR", error: error.message || String(error), isPlan, cleanSql });
     }
   }
 };
