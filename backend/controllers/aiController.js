@@ -140,3 +140,68 @@ ${prompt}
     });
   }
 };
+
+/**
+ * Analyzes an SQL query and suggests optimizations.
+ */
+export const optimizeQuery = async (req, res) => {
+  try {
+    const { schema, query } = req.body;
+
+    if (!query) {
+      return res.status(400).json({ error: "Missing 'query' in request body." });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    const modelName = "gemini-2.5-flash";
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: modelName });
+
+    const aiPrompt = `
+You are a Senior Database Performance Engineer. I am building an AI-powered SQL IDE.
+Given the following table schema and a user's SQL query, provide:
+1. An "Optimized SQL" version (if possible, or the same if already optimal).
+2. A concise "Analysis" of the query's performance bottlenecks.
+
+Format your response as a JSON object:
+{
+  "optimizedSql": "...",
+  "analysis": "..."
+}
+
+Schema:
+${schema || "No schema provided."}
+
+User Query:
+${query}
+`;
+
+    const result = await model.generateContent(aiPrompt);
+    const responseText = result.response.text();
+
+    // Parse JSON from AI response - robustly
+    let cleanedResponse = responseText.trim();
+    if (cleanedResponse.startsWith("```json")) cleanedResponse = cleanedResponse.substring(7);
+    if (cleanedResponse.startsWith("```")) cleanedResponse = cleanedResponse.substring(3);
+    if (cleanedResponse.endsWith("```")) cleanedResponse = cleanedResponse.substring(0, cleanedResponse.length - 3);
+    
+    let jsonMatch = cleanedResponse.trim().match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error(`AI returned invalid format: ${responseText}`);
+    }
+    
+    const optimization = JSON.parse(jsonMatch[0]);
+
+    res.status(200).json({
+      success: true,
+      ...optimization
+    });
+  } catch (error) {
+    console.error("Error optimizing query:", error);
+    res.status(500).json({
+      error: "Failed to optimize query",
+      details: error.message,
+    });
+  }
+};
+

@@ -56,7 +56,7 @@ export const googleLogin = async (req, res) => {
     const token = jwt.sign(
       { id: user._id, role: "developer" },
       process.env.JWT_SECRET,
-      { expiresIn: "7d" },
+      { expiresIn: "1h" },
     );
     console.log("STEP 10: JWT generated. Sending response to frontend.");
 

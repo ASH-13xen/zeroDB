@@ -20,6 +20,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "", // Will hold the Google Profile Picture URL
     },
+    postgresUri: {
+      type: String,
+      default: "",
+    },
   },
   { timestamps: true },
 );
