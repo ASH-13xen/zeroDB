@@ -24,6 +24,8 @@ const Workspace = () => {
     activeDb,
     switchDb,
     deleteDb,
+    executionTime,
+    memoryUsage,
   } = useDatabase();
   const { user } = useAuth();
 
@@ -31,6 +33,7 @@ const Workspace = () => {
   // Removed local query state as it's now managed by useDatabase context
   const [saveStatus, setSaveStatus] = useState("Synced"); // 'Synced', 'Saving', or 'Error'
   const [viewMode, setViewMode] = useState("table");
+  const [selectedQuery, setSelectedQuery] = useState("");
 
   // Resizing State
   const [sidebarWidth, setSidebarWidth] = useState(288);
@@ -130,8 +133,9 @@ const Workspace = () => {
 
   // 4. Handlers
   const handleRunQuery = () => {
-    if (query.trim()) {
-      executeSql(query);
+    const queryToRun = selectedQuery.trim() || query.trim();
+    if (queryToRun) {
+      executeSql(queryToRun);
     }
   };
 
@@ -218,12 +222,12 @@ const Workspace = () => {
               ) : (
                 <Play size={16} fill="currentColor" />
               )}
-              <span>Run Query</span>
+              <span>{selectedQuery.trim() ? "Run Selection" : "Run Query"}</span>
             </button>
           </div>
 
           <div className="flex-1 border border-zinc-800 rounded-xl overflow-hidden bg-zinc-900/50 shadow-inner group transition-colors hover:border-zinc-700">
-            <SqlEditor value={query} onChange={setQuery} />
+            <SqlEditor value={query} onChange={setQuery} onSelectionChange={setSelectedQuery} />
           </div>
         </div>
 
@@ -241,9 +245,21 @@ const Workspace = () => {
             <h2 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
               Results
               {results && (
-                <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-1 rounded-full font-bold">
-                  {results.values.length} rows
-                </span>
+                <>
+                  <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-1 rounded-full font-bold">
+                    {results.values.length} rows
+                  </span>
+                  {executionTime !== null && (
+                    <span className="text-[10px] bg-blue-900/30 text-blue-400 px-2 py-1 rounded-full border border-blue-500/20 font-bold">
+                      ⏱ {executionTime}ms
+                    </span>
+                  )}
+                  {memoryUsage !== null && memoryUsage !== "N/A" && (
+                    <span className="text-[10px] bg-purple-900/30 text-purple-400 px-2 py-1 rounded-full border border-purple-500/20 font-bold">
+                      🧠 {memoryUsage} MB Heap
+                    </span>
+                  )}
+                </>
               )}
             </h2>
 

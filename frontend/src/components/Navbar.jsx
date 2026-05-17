@@ -1,18 +1,20 @@
 import { useAuth } from "../context/AuthContext";
 import { GoogleLogin } from "@react-oauth/google";
-import { Database, LogOut, Wrench, ChevronDown, Activity, ChevronRight } from "lucide-react";
+import { Database, LogOut, Wrench, ChevronDown, Activity, ChevronRight, Settings } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useDatabaseContext } from "../context/DatabaseContext";
 import CsvUploader from "./CsvUploader";
 import AiMockDataButton from "./AiMockDataButton";
 import AiQueryGenerator from "./AiQueryGenerator";
 import QueryOptimizationModal from "./QueryOptimizationModal";
+import SettingsModal from "./SettingsModal";
 
 const Navbar = () => {
   const { user, loginWithGoogle, logout } = useAuth();
-  const { executeSql, getExecutionPlan, query, setQuery, schema, queryPlan, setQueryPlan } = useDatabaseContext();
+  const { executeSql, getExecutionPlan, query, setQuery, schema, queryPlan, setQueryPlan, executionMode, setExecutionMode } = useDatabaseContext();
   const [isToolsOpen, setIsToolsOpen] = useState(false);
   const [isOptimizerOpen, setIsOptimizerOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
   // Close dropdown when clicking outside
@@ -115,9 +117,23 @@ const Navbar = () => {
                 alt="Profile"
                 className="w-8 h-8 rounded-full border border-gray-600"
               />
-              <button onClick={logout} className="p-2 hover:bg-gray-800 rounded transition-colors group">
+              <button 
+                onClick={() => setIsSettingsOpen(true)} 
+                className="p-2 hover:bg-gray-800 rounded transition-colors group"
+                title="Settings"
+              >
+                <Settings size={18} className="text-gray-500 group-hover:text-blue-400" />
+              </button>
+              <button onClick={logout} className="p-2 hover:bg-gray-800 rounded transition-colors group" title="Logout">
                 <LogOut size={18} className="text-gray-500 group-hover:text-red-400" />
               </button>
+
+              <SettingsModal 
+                isOpen={isSettingsOpen} 
+                onClose={() => setIsSettingsOpen(false)} 
+                executionMode={executionMode} 
+                setExecutionMode={setExecutionMode} 
+              />
             </div>
           </div>
         )}

@@ -120,14 +120,21 @@ async function loadDatabase(dbName) {
 // Initial Boot
 loadDatabase("test.sqlite");
 
+const statementCache = new Map();
+const executionCounts = new Map();
+
 self.onmessage = async (event) => {
-  const { action, sql, dbName, isPlan } = event.data;
+  const { action, sql, dbName, isPlan, cleanSql, isSelectQuery } = event.data;
 
   // NEW ACTION: Switch or Create DB
   if (action === "SWITCH_DB") {
+    statementCache.clear();
+    executionCounts.clear();
     await loadDatabase(dbName);
   }
   if (action === "DELETE_DB") {
+    statementCache.clear();
+    executionCounts.clear();
     try {
       // Ensure we have the exact filename
       const targetDb = dbName.endsWith(".sqlite") ? dbName : `${dbName}.sqlite`;
@@ -173,21 +180,74 @@ self.onmessage = async (event) => {
 
   if (action === "EXECUTE") {
     try {
-      const result = db.exec(sql);
+      const startTime = performance.now();
+      let result = [];
+      const isSchemaChange = /CREATE|DROP|ALTER/i.test(sql);
       const isWriteQuery = /CREATE|INSERT|UPDATE|DELETE|DROP|ALTER/i.test(sql);
+
+      // JIT / Prepared Statement Execution for SELECTs
+      if (isSelectQuery && !isPlan) {
+        if (statementCache.has(cleanSql)) {
+          // Fast path: Execute compiled statement
+          const stmt = statementCache.get(cleanSql);
+          const columns = stmt.getColumnNames();
+          const values = [];
+          while (stmt.step()) values.push(stmt.get());
+          stmt.reset();
+          result = [{ columns, values }];
+          console.log("⚡ JIT Compiled Query Executed");
+        } else {
+          // Slow path: Execute normally
+          result = db.exec(sql);
+          // Increment counter
+          const count = (executionCounts.get(cleanSql) || 0) + 1;
+          executionCounts.set(cleanSql, count);
+          
+          // JIT Threshold: If executed > 2 times, compile it
+          if (count > 2) {
+            try {
+              const stmt = db.prepare(sql);
+              statementCache.set(cleanSql, stmt);
+              console.log("🔥 JIT Compiled Statement Cached");
+            } catch (compileErr) {
+              console.warn("Failed to compile statement for JIT:", compileErr);
+            }
+          }
+        }
+      } else {
+        // Normal Execution
+        result = db.exec(sql);
+      }
+
+      const endTime = performance.now();
+      const executionTime = endTime - startTime;
 
       if (isWriteQuery) {
         await persistToDisk();
-        if (/CREATE|DROP|ALTER/i.test(sql)) await broadcastSchema();
+        // Proactively clear statement cache on ANY write to prevent sql.js pointer corruption
+        statementCache.clear(); 
+        if (isSchemaChange) {
+          executionCounts.clear();
+          await broadcastSchema();
+        }
       }
+
+      // Memory tracking (Chrome only, but good for telemetry)
+      const memoryUsage = self.performance && self.performance.memory 
+        ? Math.round(self.performance.memory.usedJSHeapSize / 1024 / 1024) 
+        : "N/A";
 
       postMessage({
         type: "QUERY_SUCCESS",
         result: result[0] ? result[0] : { columns: [], values: [] },
         isPlan,
+        executionTime: parseFloat(executionTime.toFixed(2)),
+        memoryUsage,
+        cleanSql,
+        isSelectQuery
       });
     } catch (error) {
-      postMessage({ type: "QUERY_ERROR", error: error.message, isPlan });
+      postMessage({ type: "QUERY_ERROR", error: error.message || String(error), isPlan });
     }
   }
 };
