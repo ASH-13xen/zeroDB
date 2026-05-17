@@ -29,6 +29,7 @@ export const DatabaseProvider = ({ children }) => {
 
   const workerRef = useRef(null);
   const lastSelectQueryRef = useRef("");
+  const exportResolveRef = useRef(null);
 
   useEffect(() => {
     workerRef.current = new Worker(
@@ -145,6 +146,16 @@ export const DatabaseProvider = ({ children }) => {
           } else {
             setResults(null);
           }
+          break;
+        case "EXPORT_SUCCESS":
+          if (exportResolveRef.current) {
+            exportResolveRef.current(event.data);
+            exportResolveRef.current = null;
+          }
+          break;
+        case "IMPORT_SUCCESS":
+          setIsReady(true);
+          console.log("✅", event.data.message);
           break;
         default:
           console.warn("Unknown message from worker:", event.data);
@@ -359,6 +370,52 @@ export const DatabaseProvider = ({ children }) => {
     workerRef.current.postMessage({ action: "FINALIZE_BASELINE" });
   }, []);
 
+  const exportAndShareDatabase = useCallback(async (mode) => {
+    if (!workerRef.current || executionMode !== "draft") return;
+    
+    // 1. Get the bytes from worker
+    const { dbBytes, dbName } = await new Promise((resolve, reject) => {
+      exportResolveRef.current = resolve;
+      workerRef.current.postMessage({ action: "EXPORT_ACTIVE_DB" });
+      setTimeout(() => reject(new Error("Export timed out")), 5000);
+    });
+
+    // 2. Create FormData
+    const formData = new FormData();
+    const blob = new Blob([dbBytes], { type: "application/octet-stream" });
+    formData.append("databaseFile", blob, dbName);
+    formData.append("dbName", dbName);
+    formData.append("mode", mode);
+
+    // 3. Upload to backend
+    const { default: api } = await import("../services/api");
+    const response = await api.post("/share/upload", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data;
+  }, [executionMode]);
+
+  const importSharedDatabase = useCallback(async (shareId) => {
+    if (!workerRef.current) return;
+    
+    setIsReady(false);
+    
+    // 1. Download from backend as Blob/ArrayBuffer
+    const { default: api } = await import("../services/api");
+    const response = await api.get(`/share/${shareId}`, { responseType: "arraybuffer" });
+    
+    const dbName = response.headers["x-database-name"] || `imported_${Date.now()}.sqlite`;
+    
+    // 2. Send bytes to worker to initialize
+    workerRef.current.postMessage({
+      action: "IMPORT_DB_BYTES",
+      dbName,
+      dbBytes: response.data,
+    });
+    
+    localStorage.setItem("zeroDB_active_db", dbName);
+  }, []);
+
   return (
     <DatabaseContext.Provider
       value={{
@@ -392,6 +449,9 @@ export const DatabaseProvider = ({ children }) => {
         restoreSnapshot,
         commitRevert,
         finalizeBaseline,
+        // Sharing
+        exportAndShareDatabase,
+        importSharedDatabase,
       }}
     >
       {children}
