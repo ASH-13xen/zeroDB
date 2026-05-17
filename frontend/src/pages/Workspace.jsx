@@ -7,6 +7,7 @@ import ResultsTable from "../components/ResultsTable";
 import ChartVisualizer from "../components/ChartVisualizer";
 import api from "../services/api";
 import DatabaseExplorer from "../components/DatabaseExplorer";
+import { useAuth } from "../context/AuthContext";
 
 const Workspace = () => {
   // 1. Consume Shared Database & Editor State from Context
@@ -24,6 +25,7 @@ const Workspace = () => {
     switchDb,
     deleteDb,
   } = useDatabase();
+  const { user } = useAuth();
 
   // 2. State to hold the SQL code in the editor
   // Removed local query state as it's now managed by useDatabase context
@@ -77,6 +79,12 @@ const Workspace = () => {
   // 2. Load saved workspace from cloud on mount
   useEffect(() => {
     const loadWorkspace = async () => {
+      if (!user) {
+        setQuery(
+          '-- Welcome to zeroDB Edge Mode\nCREATE TABLE test (id INTEGER, name TEXT);\nINSERT INTO test VALUES (1, "Alice"), (2, "Bob");\nSELECT * FROM test;',
+        );
+        return;
+      }
       try {
         const res = await api.get("/auth/workspace");
         if (res.data.success && res.data.query) {
@@ -94,11 +102,16 @@ const Workspace = () => {
       }
     };
     loadWorkspace();
-  }, [setQuery]);
+  }, [setQuery, user]);
 
   // 3. Debounced Auto-Save Logic
   useEffect(() => {
     if (!query) return;
+
+    if (!user) {
+      setSaveStatus("Offline");
+      return;
+    }
 
     setSaveStatus("Saving");
 
@@ -113,7 +126,7 @@ const Workspace = () => {
     }, 1500);
 
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, user]);
 
   // 4. Handlers
   const handleRunQuery = () => {

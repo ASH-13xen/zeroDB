@@ -5,6 +5,7 @@
 export const parseQueryPlan = (results) => {
   if (!results || !results.values) return { nodes: [], edges: [] };
 
+  const { values } = results;
   const nodes = [];
   const edges = [];
   
