@@ -28,6 +28,7 @@ export const DatabaseProvider = ({ children }) => {
   const [memoryUsage, setMemoryUsage] = useState(null);
 
   const workerRef = useRef(null);
+  const lastSelectQueryRef = useRef("");
 
   useEffect(() => {
     workerRef.current = new Worker(
@@ -74,6 +75,7 @@ export const DatabaseProvider = ({ children }) => {
             setMemoryUsage(memUsage);
 
             if (event.data.isSelectQuery && event.data.cleanSql) {
+              lastSelectQueryRef.current = event.data.cleanSql;
               lruCache.current.set(event.data.cleanSql, {
                 result,
                 executionTime: exTime,
@@ -121,6 +123,29 @@ export const DatabaseProvider = ({ children }) => {
           if (dbList) setDatabases(dbList);
           if (currentDb) setActiveDb(currentDb);
           break;
+        case "SNAPSHOTS_UPDATE":
+          setSnapshots(event.data.snapshots);
+          setCurrentSnapshotIndex(event.data.currentSnapshotIndex);
+          break;
+        case "RESTORE_SUCCESS":
+          // Wipe out LRU cache to prevent stale data retrieval
+          lruCache.current.clear();
+          
+          // Re-execute the last select query to keep results in sync!
+          if (lastSelectQueryRef.current) {
+            const lastQuery = lastSelectQueryRef.current;
+            setIsExecuting(true);
+            setError(null);
+            workerRef.current?.postMessage({
+              action: "EXECUTE",
+              sql: lastQuery,
+              isSelectQuery: true,
+              cleanSql: lastQuery
+            });
+          } else {
+            setResults(null);
+          }
+          break;
         default:
           console.warn("Unknown message from worker:", event.data);
       }
@@ -135,6 +160,10 @@ export const DatabaseProvider = ({ children }) => {
     return localStorage.getItem("zeroDB_execution_mode") || "draft";
   }); // "draft" or "production"
   const [postgresUri, setPostgresUri] = useState("");
+  
+  // SQL Time-Travel Debugging State
+  const [snapshots, setSnapshots] = useState([]);
+  const [currentSnapshotIndex, setCurrentSnapshotIndex] = useState(-1);
   
   useEffect(() => {
     localStorage.setItem("zeroDB_execution_mode", executionMode);
@@ -315,6 +344,21 @@ export const DatabaseProvider = ({ children }) => {
     workerRef.current.postMessage({ action: "DELETE_DB", dbName });
   }, []);
 
+  const restoreSnapshot = useCallback((index) => {
+    if (!workerRef.current) return;
+    workerRef.current.postMessage({ action: "RESTORE_SNAPSHOT", index });
+  }, []);
+
+  const commitRevert = useCallback((index) => {
+    if (!workerRef.current) return;
+    workerRef.current.postMessage({ action: "COMMIT_REVERT", index });
+  }, []);
+
+  const finalizeBaseline = useCallback(() => {
+    if (!workerRef.current) return;
+    workerRef.current.postMessage({ action: "FINALIZE_BASELINE" });
+  }, []);
+
   return (
     <DatabaseContext.Provider
       value={{
@@ -342,6 +386,12 @@ export const DatabaseProvider = ({ children }) => {
         memoryUsage,
         executionMode,
         setExecutionMode,
+        // Time Travel
+        snapshots,
+        currentSnapshotIndex,
+        restoreSnapshot,
+        commitRevert,
+        finalizeBaseline,
       }}
     >
       {children}

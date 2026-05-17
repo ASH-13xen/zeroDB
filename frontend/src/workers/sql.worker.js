@@ -5,6 +5,23 @@ import wasmUrl from "sql.js/dist/sql-wasm.wasm?url";
 let db = null;
 let SQL = null;
 let activeDbName = "test.sqlite";
+
+// SQL Time-Travel Debugging Snapshots
+let dbSnapshots = [];
+let currentSnapshotIndex = -1;
+
+function broadcastSnapshots() {
+  postMessage({
+    type: "SNAPSHOTS_UPDATE",
+    snapshots: dbSnapshots.map(s => ({
+      id: s.id,
+      timestamp: s.timestamp,
+      query: s.query
+    })),
+    currentSnapshotIndex
+  });
+}
+
 // Helper: Scan OPFS for all .sqlite files
 
 async function getAvailableDatabases() {
@@ -107,6 +124,17 @@ async function loadDatabase(dbName) {
     }
 
     db = new SQL.Database(binaryData);
+    
+    // Initialize baseline snapshot
+    dbSnapshots = [{
+      id: 0,
+      timestamp: Date.now(),
+      query: "Initial Database State",
+      dbBytes: db.export()
+    }];
+    currentSnapshotIndex = 0;
+    broadcastSnapshots();
+
     await broadcastSchema();
     postMessage({
       type: "INIT_SUCCESS",
@@ -182,6 +210,79 @@ self.onmessage = async (event) => {
     }
   }
 
+  if (action === "RESTORE_SNAPSHOT") {
+    const { index } = event.data;
+    if (db && index >= 0 && index < dbSnapshots.length) {
+      currentSnapshotIndex = index;
+      const snapshot = dbSnapshots[index];
+      
+      // Close old DB and load the snapshot bytes
+      db.close();
+      db = new SQL.Database(new Uint8Array(snapshot.dbBytes));
+      
+      // Persist restored state to disk
+      await persistToDisk();
+      
+      // Clear caches
+      statementCache.clear();
+      executionCounts.clear();
+      
+      // Broadcast state
+      broadcastSnapshots();
+      await broadcastSchema();
+      
+      postMessage({
+        type: "RESTORE_SUCCESS",
+        message: `Restored database to: "${snapshot.query}"`,
+        index
+      });
+    }
+  }
+
+  if (action === "COMMIT_REVERT") {
+    const { index } = event.data;
+    if (db && index >= 0 && index < dbSnapshots.length) {
+      // Truncate the future snapshots!
+      dbSnapshots = dbSnapshots.slice(0, index + 1);
+      currentSnapshotIndex = index;
+      
+      db.close();
+      db = new SQL.Database(new Uint8Array(dbSnapshots[index].dbBytes));
+      
+      await persistToDisk();
+      
+      statementCache.clear();
+      executionCounts.clear();
+      
+      broadcastSnapshots();
+      await broadcastSchema();
+      
+      postMessage({
+        type: "RESTORE_SUCCESS",
+        message: `Database permanently reverted to snapshot #${index + 1}`,
+        index
+      });
+    }
+  }
+
+  if (action === "FINALIZE_BASELINE") {
+    if (db) {
+      const currentBytes = db.export();
+      
+      // Compact snapshots list to exactly 1 baseline snapshot of the current state
+      dbSnapshots = [{
+        id: 0,
+        timestamp: Date.now(),
+        query: "Initial Database State",
+        dbBytes: currentBytes
+      }];
+      currentSnapshotIndex = 0;
+      
+      await persistToDisk();
+      broadcastSnapshots();
+    }
+  }
+
   if (action === "EXECUTE") {
     try {
       const startTime = performance.now();
@@ -227,7 +328,24 @@ self.onmessage = async (event) => {
       const executionTime = endTime - startTime;
 
       if (isWriteQuery) {
+        // Truncate future snapshots if we are in the past
+        if (currentSnapshotIndex < dbSnapshots.length - 1) {
+          dbSnapshots = dbSnapshots.slice(0, currentSnapshotIndex + 1);
+        }
+
         await persistToDisk();
+
+        // Take snapshot after executing
+        const postWriteBytes = db.export();
+        dbSnapshots.push({
+          id: dbSnapshots.length,
+          timestamp: Date.now(),
+          query: sql,
+          dbBytes: postWriteBytes
+        });
+        currentSnapshotIndex = dbSnapshots.length - 1;
+        broadcastSnapshots();
+
         // Proactively clear statement cache on ANY write to prevent sql.js pointer corruption
         statementCache.clear(); 
         if (isSchemaChange) {
