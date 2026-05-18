@@ -2,6 +2,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import SharedDatabase from "../models/SharedDatabase.js";
+import Invitation from "../models/Invitation.js";
 import { nanoid } from "nanoid";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -54,9 +55,21 @@ export const downloadDatabase = async (req, res) => {
 
     // Check permissions
     if (sharedDb.mode === "private") {
-      // Must be logged in and the owner
-      if (!req.user || req.user.id.toString() !== sharedDb.ownerId.toString()) {
+      // Must be logged in
+      if (!req.user) {
         return res.status(403).json({ error: "You do not have permission to access this private database." });
+      }
+
+      // If not the owner, check if the user has an active invitation to collaborate on this database
+      if (req.user.id.toString() !== sharedDb.ownerId.toString()) {
+        const hasInvitation = await Invitation.findOne({
+          shareId: sharedDb.shareId,
+          recipientId: req.user.id
+        });
+
+        if (!hasInvitation) {
+          return res.status(403).json({ error: "You do not have permission to access this private database." });
+        }
       }
     }
 

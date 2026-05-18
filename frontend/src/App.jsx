@@ -7,17 +7,31 @@ import {
 } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import { DatabaseProvider } from "./context/DatabaseContext";
+import { CollabProvider } from "./context/CollabContext";
 import Navbar from "./components/Navbar";
+import InvitationToast from "./components/InvitationToast";
+import { useEffect } from "react";
+import { useDatabaseContext } from "./context/DatabaseContext";
+import { useCollab } from "./context/CollabContext";
 import LandingPage from "./pages/LandingPage";
 import Workspace from "./pages/Workspace";
 
 function AppRoutes() {
   const { user } = useAuth();
   const location = useLocation();
+  const dbCtx = useDatabaseContext();
+  const { registerDatabaseContext } = useCollab();
+
+  useEffect(() => {
+    if (dbCtx) {
+      registerDatabaseContext(dbCtx);
+    }
+  }, [dbCtx, registerDatabaseContext]);
 
   return (
     <div className="flex flex-col h-screen bg-gray-950 text-white">
       <Navbar />
+      <InvitationToast />
       <div className="flex-grow overflow-hidden">
         <Routes>
           {/* If user is logged in, redirect them to their workspace (preserving query params), otherwise show landing page */}
@@ -41,10 +55,13 @@ function App() {
   return (
     <Router>
       <DatabaseProvider>
-        <AppRoutes />
+        <CollabProvider>
+          <AppRoutes />
+        </CollabProvider>
       </DatabaseProvider>
     </Router>
   );
 }
 
 export default App;
+

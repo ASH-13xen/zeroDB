@@ -1,20 +1,25 @@
 import { useAuth } from "../context/AuthContext";
 import { GoogleLogin } from "@react-oauth/google";
-import { Database, LogOut, Wrench, ChevronDown, Activity, ChevronRight, Settings } from "lucide-react";
+import { Database, LogOut, Wrench, ChevronDown, Activity, ChevronRight, Settings, UsersRound } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useDatabaseContext } from "../context/DatabaseContext";
+import { useCollab } from "../context/CollabContext";
 import CsvUploader from "./CsvUploader";
 import AiMockDataButton from "./AiMockDataButton";
 import AiQueryGenerator from "./AiQueryGenerator";
 import QueryOptimizationModal from "./QueryOptimizationModal";
 import SettingsModal from "./SettingsModal";
+import CollabInviteModal from "./CollabInviteModal";
 
 const Navbar = () => {
   const { user, loginWithGoogle, logout } = useAuth();
   const { executeSql, getExecutionPlan, query, setQuery, schema, queryPlan, executionMode, setExecutionMode } = useDatabaseContext();
+  const { activeRoomId, collaborators } = useCollab();
+  
   const [isToolsOpen, setIsToolsOpen] = useState(false);
   const [isOptimizerOpen, setIsOptimizerOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isCollabOpen, setIsCollabOpen] = useState(false);
   const dropdownRef = useRef(null);
 
   // Close dropdown when clicking outside
@@ -40,6 +45,42 @@ const Navbar = () => {
       <div className="flex items-center space-x-6">
         {user && (
           <div className="flex items-center space-x-4">
+            {/* Multiplayer Collaboration Portal */}
+            <div className="flex items-center space-x-3">
+              {activeRoomId && collaborators.length > 0 && (
+                <div className="flex -space-x-2">
+                  {collaborators.map((peer) => (
+                    <img
+                      key={peer._id}
+                      src={peer.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80"}
+                      alt={peer.name}
+                      title={`${peer.name} (${peer.email})`}
+                      className="w-7 h-7 rounded-full border-2 border-gray-900 object-cover hover:z-10 cursor-pointer shadow"
+                    />
+                  ))}
+                </div>
+              )}
+
+              <button
+                onClick={() => setIsCollabOpen(true)}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-all ${
+                  activeRoomId
+                    ? "bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 border-indigo-500/30 shadow-indigo-650/5"
+                    : "bg-gray-800 hover:bg-gray-700 border-gray-700 text-gray-300"
+                }`}
+              >
+                <UsersRound size={16} className={activeRoomId ? "text-indigo-400 animate-pulse" : "text-gray-400"} />
+                <span>{activeRoomId ? "Live Room" : "Collaborate"}</span>
+              </button>
+            </div>
+
+            <CollabInviteModal
+              isOpen={isCollabOpen}
+              onClose={() => setIsCollabOpen(false)}
+            />
+
+            <div className="h-6 w-px bg-gray-800" />
+
             {/* Tools Dropdown */}
             <div className="relative" ref={dropdownRef}>
               <button

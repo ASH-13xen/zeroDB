@@ -283,6 +283,52 @@ self.onmessage = async (event) => {
     }
   }
 
+  if (action === "SAVE_DB_AS") {
+    const { newDbName } = event.data;
+    try {
+      if (!db) throw new Error("No database currently active.");
+      
+      const currentBytes = db.export();
+      const targetDb = newDbName.endsWith(".sqlite") ? newDbName : `${newDbName}.sqlite`;
+      
+      const root = await navigator.storage.getDirectory();
+      const fileHandle = await root.getFileHandle(targetDb, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(currentBytes);
+      await writable.close();
+      
+      console.log(`💾 Cloned database successfully to: ${targetDb}`);
+      
+      activeDbName = targetDb;
+      
+      // Clear prepared JIT statement caches
+      statementCache.clear();
+      executionCounts.clear();
+      
+      // Reset snapshots list to a single baseline snapshot of the cloned state
+      dbSnapshots = [{
+        id: 0,
+        timestamp: Date.now(),
+        query: `Cloned Database State from Collaborative Session`,
+        dbBytes: currentBytes
+      }];
+      currentSnapshotIndex = 0;
+      
+      broadcastSnapshots();
+      await broadcastSchema();
+      
+      postMessage({
+        type: "INIT_SUCCESS",
+        message: `Connected to cloned database ${activeDbName}`,
+      });
+    } catch (err) {
+      postMessage({
+        type: "QUERY_ERROR",
+        error: `Failed to save database copy: ${err.message}`,
+      });
+    }
+  }
+
   // --- NEW: Export & Import Handlers for Sharing ---
   if (action === "EXPORT_ACTIVE_DB") {
     if (db) {
