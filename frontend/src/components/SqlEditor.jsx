@@ -1,7 +1,7 @@
 import Editor from "@monaco-editor/react";
 
 const SqlEditor = ({ value, onChange, onSelectionChange }) => {
-  const handleEditorDidMount = (editor, monaco) => {
+  const handleEditorDidMount = (editor) => {
     editor.onDidChangeCursorSelection((e) => {
       const selection = editor.getModel().getValueInRange(e.selection);
       if (onSelectionChange) {

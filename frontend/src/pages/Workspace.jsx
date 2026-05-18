@@ -142,25 +142,29 @@ const Workspace = () => {
   }, [query, user]);
 
   // NEW: Handle Import Shared DB from URL
+  const hasPromptedImport = useRef(false);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const shareId = params.get("importDb");
     
-    if (shareId) {
+    if (shareId && !hasPromptedImport.current) {
+      hasPromptedImport.current = true;
+      
       const confirmImport = window.confirm(
         "You are about to import a shared database. If a local database with the same name exists, it will be overwritten. Do you want to proceed?"
       );
       
+      // Remove the parameter from the URL synchronously so it doesn't trigger again
+      // even if React StrictMode unmounts/remounts before the promise resolves.
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
       if (confirmImport) {
         importSharedDatabase(shareId).then(() => {
-          // Remove the parameter from the URL after successful import
-          window.history.replaceState({}, document.title, window.location.pathname);
           alert("Database imported successfully!");
         }).catch((err) => {
           alert("Failed to import database: " + err.message);
         });
-      } else {
-        window.history.replaceState({}, document.title, window.location.pathname);
       }
     }
   }, [importSharedDatabase]);

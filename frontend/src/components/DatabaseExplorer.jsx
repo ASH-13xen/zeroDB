@@ -83,7 +83,7 @@ export default function DatabaseExplorer({
         const url = new URL(shareId);
         shareId = url.searchParams.get("importDb") || shareId;
       }
-    } catch (e) {
+    } catch {
       // Not a valid URL, assume it's just the ID
     }
 

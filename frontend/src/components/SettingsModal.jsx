@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Server, Settings, Save, Loader2, X } from "lucide-react";
+import { Server, Settings, Save, Loader2, X, DatabaseZap } from "lucide-react";
 import api from "../services/api";
 
 export default function SettingsModal({ isOpen, onClose, executionMode, setExecutionMode }) {
@@ -22,7 +22,7 @@ export default function SettingsModal({ isOpen, onClose, executionMode, setExecu
     try {
       await api.post("/db/postgres-uri", { uri: postgresUri });
       setMessage("PostgreSQL URI saved successfully.");
-    } catch (error) {
+    } catch {
       setMessage("Failed to save URI.");
     } finally {
       setIsSaving(false);
@@ -57,30 +57,41 @@ export default function SettingsModal({ isOpen, onClose, executionMode, setExecu
             <div className="flex bg-zinc-900 p-1 rounded-lg border border-zinc-800">
               <button
                 onClick={() => setExecutionMode("draft")}
-                className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                className={`flex-1 py-2 px-2 rounded-md text-xs font-medium transition-colors ${
                   executionMode === "draft" 
                     ? "bg-zinc-700 text-white shadow" 
                     : "text-zinc-400 hover:text-zinc-200"
                 }`}
               >
-                Draft (Local Wasm)
+                Draft (SQLite)
+              </button>
+              <button
+                onClick={() => setExecutionMode("olap")}
+                className={`flex-1 flex items-center justify-center space-x-1 py-2 px-2 rounded-md text-xs font-medium transition-colors ${
+                  executionMode === "olap" 
+                    ? "bg-emerald-600 text-white shadow" 
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                <DatabaseZap size={14} />
+                <span>OLAP (DuckDB)</span>
               </button>
               <button
                 onClick={() => setExecutionMode("production")}
-                className={`flex-1 flex items-center justify-center space-x-2 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                className={`flex-1 flex items-center justify-center space-x-1 py-2 px-2 rounded-md text-xs font-medium transition-colors ${
                   executionMode === "production" 
                     ? "bg-blue-600 text-white shadow" 
                     : "text-zinc-400 hover:text-zinc-200"
                 }`}
               >
                 <Server size={14} />
-                <span>Production (Remote)</span>
+                <span>Production</span>
               </button>
             </div>
             <p className="text-xs text-zinc-500 mt-2">
-              {executionMode === "draft" 
-                ? "Fast, edge-based execution using local WebAssembly. Changes persist in your browser."
-                : "Execute queries against a remote PostgreSQL database via the backend."}
+              {executionMode === "draft" && "Fast, edge-based execution using local SQLite Wasm. Best for transactional drafts."}
+              {executionMode === "olap" && "High-performance analytical engine using DuckDB Wasm. Supports zero-RAM CSV streaming."}
+              {executionMode === "production" && "Execute queries against a remote PostgreSQL database via the backend."}
             </p>
           </div>
 

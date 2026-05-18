@@ -2,8 +2,10 @@ import React, { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { UploadCloud, FileSpreadsheet, Loader2, CheckCircle2 } from "lucide-react";
 import { processCsvToSql } from "../utils/csvParser";
+import { useDatabaseContext } from "../context/DatabaseContext";
 
 export default function CsvUploader({ onExecuteSql }) {
+    const { executionMode, registerFileForOlap } = useDatabaseContext();
     const [status, setStatus] = useState("idle"); // idle, processing, success, error
     const [fileName, setFileName] = useState("");
     const [errorMessage, setErrorMessage] = useState("");
@@ -20,15 +22,21 @@ export default function CsvUploader({ onExecuteSql }) {
             // Ensure table name is safe (no .csv extension, only alphanumerics optionally)
             const tableName = file.name.replace(/\.csv$/i, "").replace(/[^a-zA-Z0-9_]/g, "_");
 
-            const generatedSqlString = await processCsvToSql(file, tableName);
-            
-            // Pass the raw SQL string back out to whatever function the Workspace gives us
-            if (onExecuteSql) {
-                await onExecuteSql(generatedSqlString);
-                // Auto-run SELECT * to show results immediately
-                setTimeout(() => {
-                    onExecuteSql(`SELECT * FROM ${tableName} LIMIT 100;`);
-                }, 100);
+            if (executionMode === "olap") {
+                // Zero-RAM massive CSV streaming via DuckDB Wasm
+                registerFileForOlap(file, tableName);
+            } else {
+                // Traditional RAM-heavy SQL Insert method for SQLite/Postgres
+                const generatedSqlString = await processCsvToSql(file, tableName);
+                
+                // Pass the raw SQL string back out to whatever function the Workspace gives us
+                if (onExecuteSql) {
+                    await onExecuteSql(generatedSqlString);
+                    // Auto-run SELECT * to show results immediately
+                    setTimeout(() => {
+                        onExecuteSql(`SELECT * FROM ${tableName} LIMIT 100;`);
+                    }, 100);
+                }
             }
 
             setStatus("success");
@@ -44,7 +52,7 @@ export default function CsvUploader({ onExecuteSql }) {
             setErrorMessage(error.message || "Failed to process CSV file.");
             setStatus("error");
         }
-    }, [onExecuteSql]);
+    }, [onExecuteSql, executionMode, registerFileForOlap]);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
@@ -92,9 +100,11 @@ export default function CsvUploader({ onExecuteSql }) {
                         <>
                             <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
                             <p className="text-sm text-zinc-300">
-                                Parsing <span className="font-medium text-emerald-400">{fileName}</span>...
+                                {executionMode === "olap" ? "Streaming" : "Parsing"} <span className="font-medium text-emerald-400">{fileName}</span>...
                             </p>
-                            <p className="text-xs text-zinc-500">Generating SQL Queries</p>
+                            <p className="text-xs text-zinc-500">
+                                {executionMode === "olap" ? "Registering directly via DuckDB Wasm" : "Generating SQL Queries"}
+                            </p>
                         </>
                     )}
 
