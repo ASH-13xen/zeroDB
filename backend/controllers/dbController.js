@@ -77,8 +77,16 @@ export const executePostgresQuery = async (req, res) => {
     const executionTime = endTime - startTime;
 
     // Convert pg result to match our frontend format { columns, values }
-    const columns = result.fields.map(f => f.name);
-    const values = result.rows.map(row => columns.map(col => row[col]));
+    let columns = [];
+    let values = [];
+
+    // pool.query returns an array of results if multiple statements were executed (like in CSV import)
+    const finalResult = Array.isArray(result) ? result[result.length - 1] : result;
+
+    if (finalResult && finalResult.fields) {
+      columns = finalResult.fields.map(f => f.name);
+      values = finalResult.rows.map(row => columns.map(col => row[col]));
+    }
 
     res.status(200).json({
       success: true,

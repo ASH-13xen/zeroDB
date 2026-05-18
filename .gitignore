@@ -51,6 +51,10 @@ logs/
 *.sqlite3
 *.dump
 pgdata/
+users.csv
+orders.csv
+users_new*
+orders_new*
 
 # ------------------------------------------
 # OS Generated Files
