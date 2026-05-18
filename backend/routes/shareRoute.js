@@ -2,10 +2,17 @@ import express from "express";
 import multer from "multer";
 import jwt from "jsonwebtoken";
 import path from "path";
+import fs from "fs";
 import { uploadDatabase, downloadDatabase } from "../controllers/shareController.js";
 import { protect } from "../middlewares/authmiddleware.js";
 
 const router = express.Router();
+
+// Ensure uploads directory exists
+const uploadDir = "uploads/";
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 
 // Multer config
 const storage = multer.diskStorage({

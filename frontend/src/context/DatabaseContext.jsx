@@ -34,6 +34,11 @@ export const DatabaseProvider = ({ children }) => {
   const duckdbWorkerRef = useRef(null);
   const lastSelectQueryRef = useRef("");
   
+  const executionModeRef = useRef(executionMode);
+  useEffect(() => {
+    executionModeRef.current = executionMode;
+  }, [executionMode]);
+
   const getActiveWorker = useCallback(() => {
     // If we're not in olap mode, we always fallback to sqlite worker for local operations
     return executionMode === "olap" ? duckdbWorkerRef.current : sqliteWorkerRef.current;
@@ -59,9 +64,10 @@ export const DatabaseProvider = ({ children }) => {
 
     const createWorkerMessageHandler = (workerSource) => (event) => {
       // Ignore UI updates from background workers
+      const currentMode = executionModeRef.current;
       const isActiveWorker = 
-        (executionMode === "olap" && workerSource === duckdbWorkerRef.current) ||
-        (executionMode === "draft" && workerSource === sqliteWorkerRef.current);
+        (currentMode === "olap" && workerSource === duckdbWorkerRef.current) ||
+        (currentMode === "draft" && workerSource === sqliteWorkerRef.current);
 
       if (event.data.type !== "INIT_SUCCESS" && !isActiveWorker) return;
 
@@ -88,7 +94,7 @@ export const DatabaseProvider = ({ children }) => {
           if (event.data.tableName) {
             const autoSql = `SELECT * FROM ${event.data.tableName} LIMIT 100;`;
             setQuery(autoSql);
-            const activeWorker = executionMode === "olap" ? duckdbWorkerRef.current : sqliteWorkerRef.current;
+            const activeWorker = currentMode === "olap" ? duckdbWorkerRef.current : sqliteWorkerRef.current;
             activeWorker?.postMessage({
               action: "EXECUTE",
               sql: autoSql,
@@ -174,7 +180,7 @@ export const DatabaseProvider = ({ children }) => {
             const lastQuery = lastSelectQueryRef.current;
             setIsExecuting(true);
             setError(null);
-            const activeWorker = executionMode === "olap" ? duckdbWorkerRef.current : sqliteWorkerRef.current;
+            const activeWorker = currentMode === "olap" ? duckdbWorkerRef.current : sqliteWorkerRef.current;
             activeWorker?.postMessage({
               action: "EXECUTE",
               sql: lastQuery,
@@ -208,7 +214,7 @@ export const DatabaseProvider = ({ children }) => {
       duckdbWorkerRef.current?.terminate();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [executionMode]);
+  }, []);
 
   
 
@@ -241,6 +247,10 @@ export const DatabaseProvider = ({ children }) => {
   // LRU Cache
   const lruCache = useRef(new Map());
   const MAX_CACHE_SIZE = 20;
+
+  useEffect(() => {
+    lruCache.current.clear();
+  }, [executionMode, activeDb]);
 
   const executeSql = useCallback(
     async (sqlString) => {
@@ -388,17 +398,19 @@ export const DatabaseProvider = ({ children }) => {
 
   // Your new DB control functions
   const switchDb = useCallback((dbName) => {
-    if (!sqliteWorkerRef.current) return;
+    const activeWorker = getActiveWorker();
+    if (!activeWorker) return;
     setIsReady(false);
     setResults(null);
     localStorage.setItem("zeroDB_active_db", dbName);
-    sqliteWorkerRef.current.postMessage({ action: "SWITCH_DB", dbName });
-  }, []);
+    activeWorker.postMessage({ action: "SWITCH_DB", dbName });
+  }, [getActiveWorker]);
 
   const deleteDb = useCallback((dbName) => {
-    if (!sqliteWorkerRef.current) return;
-    sqliteWorkerRef.current.postMessage({ action: "DELETE_DB", dbName });
-  }, []);
+    const activeWorker = getActiveWorker();
+    if (!activeWorker) return;
+    activeWorker.postMessage({ action: "DELETE_DB", dbName });
+  }, [getActiveWorker]);
 
   const restoreSnapshot = useCallback((index) => {
     if (!sqliteWorkerRef.current) return;

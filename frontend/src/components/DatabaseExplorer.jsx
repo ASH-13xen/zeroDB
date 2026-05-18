@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useDatabaseContext } from "../context/DatabaseContext";
+import { Link, Download, Trash2 } from "lucide-react";
 
 export default function DatabaseExplorer({
   schema = [],
@@ -112,11 +113,11 @@ export default function DatabaseExplorer({
           Active Database
         </h2>
 
-        <div className="flex gap-2 mb-2">
+        <div className="flex flex-col gap-2 mb-2">
           <select
             value={activeDb || ""}
             onChange={(e) => onSwitchDb(e.target.value)}
-            className="flex-1 w-full bg-zinc-950 border border-zinc-700 text-zinc-300 rounded p-1.5 text-sm outline-none focus:border-blue-500 transition-colors"
+            className="w-full bg-zinc-950 border border-zinc-700 text-zinc-300 rounded p-1.5 text-sm outline-none focus:border-blue-500 transition-colors"
           >
             {databases.map((db) => (
               <option key={db} value={db}>
@@ -125,66 +126,70 @@ export default function DatabaseExplorer({
             ))}
           </select>
           
-          {executionMode === "draft" && (
-            <>
-              <button
-                onClick={() => setShareModalOpen(true)}
-                title="Share Database"
-                className="px-2.5 flex items-center justify-center border border-indigo-900/50 bg-indigo-900/20 text-indigo-400 hover:bg-indigo-900/40 rounded transition-colors"
-              >
-                🔗
-              </button>
-              
-              <button
-                onClick={() => setImportModalOpen(true)}
-                title="Import Database from Link"
-                className="px-2.5 flex items-center justify-center border border-emerald-900/50 bg-emerald-900/20 text-emerald-400 hover:bg-emerald-900/40 rounded transition-colors"
-              >
-                📥
-              </button>
-            </>
-          )}
+          <div className="flex gap-2">
+            {executionMode === "draft" && (
+              <>
+                <button
+                  onClick={() => setShareModalOpen(true)}
+                  title="Share Database"
+                  className="flex-1 px-2.5 py-1.5 flex items-center justify-center border border-indigo-900/50 bg-indigo-900/20 text-indigo-400 hover:bg-indigo-900/40 rounded transition-colors"
+                >
+                  <Link size={16} />
+                </button>
+                
+                <button
+                  onClick={() => setImportModalOpen(true)}
+                  title="Import Database from Link"
+                  className="flex-1 px-2.5 py-1.5 flex items-center justify-center border border-emerald-900/50 bg-emerald-900/20 text-emerald-400 hover:bg-emerald-900/40 rounded transition-colors"
+                >
+                  <Download size={16} />
+                </button>
+              </>
+            )}
 
-          <button
-            onClick={handleDelete}
-            title="Delete Database"
-            className="px-2.5 flex items-center justify-center border border-rose-900/50 bg-rose-900/20 text-rose-500 hover:bg-rose-900/40 rounded transition-colors"
-          >
-            🗑️
-          </button>
+            <button
+              onClick={handleDelete}
+              title="Delete Database"
+              className="flex-1 px-2.5 py-1.5 flex items-center justify-center border border-rose-900/50 bg-rose-900/20 text-rose-500 hover:bg-rose-900/40 rounded transition-colors"
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
         </div>
 
-        {isCreating ? (
-          <form onSubmit={handleCreateDb} className="flex gap-2 mt-2">
-            <input
-              autoFocus
-              type="text"
-              placeholder="db_name"
-              value={newDbName}
-              onChange={(e) => setNewDbName(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-700 text-zinc-300 rounded px-2 py-1 text-xs outline-none focus:border-blue-500"
-            />
+        {executionMode !== "production" && (
+          isCreating ? (
+            <form onSubmit={handleCreateDb} className="flex gap-2 mt-2">
+              <input
+                autoFocus
+                type="text"
+                placeholder="db_name"
+                value={newDbName}
+                onChange={(e) => setNewDbName(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-700 text-zinc-300 rounded px-2 py-1 text-xs outline-none focus:border-blue-500"
+              />
+              <button
+                type="submit"
+                className="bg-blue-600 text-white px-2 py-1 rounded text-xs hover:bg-blue-500 transition-colors"
+              >
+                Add
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsCreating(false)}
+                className="text-zinc-500 hover:text-zinc-300 px-1 text-xs transition-colors"
+              >
+                ✕
+              </button>
+            </form>
+          ) : (
             <button
-              type="submit"
-              className="bg-blue-600 text-white px-2 py-1 rounded text-xs hover:bg-blue-500 transition-colors"
+              onClick={() => setIsCreating(true)}
+              className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 mt-2 transition-colors"
             >
-              Add
+              <span>+ New Database</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setIsCreating(false)}
-              className="text-zinc-500 hover:text-zinc-300 px-1 text-xs transition-colors"
-            >
-              ✕
-            </button>
-          </form>
-        ) : (
-          <button
-            onClick={() => setIsCreating(true)}
-            className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 mt-2 transition-colors"
-          >
-            <span>+ New Database</span>
-          </button>
+          )
         )}
       </div>
 

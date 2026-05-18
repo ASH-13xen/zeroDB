@@ -17,6 +17,8 @@ const MANUAL_BUNDLES = {
 
 let db = null;
 let conn = null;
+let activeDbName = "olap_db";
+let databases = new Set(["olap_db"]);
 
 async function initDuckDB() {
   if (db) return;
@@ -28,9 +30,12 @@ async function initDuckDB() {
     await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
     conn = await db.connect();
     
+    await conn.query(`CREATE SCHEMA IF NOT EXISTS "${activeDbName}";`);
+    await conn.query(`SET schema = '${activeDbName}';`);
+    
     postMessage({
       type: "INIT_SUCCESS",
-      message: "Connected to DuckDB-Wasm (OLAP Mode)",
+      message: `Connected to DuckDB-Wasm (OLAP Mode) - ${activeDbName}`,
     });
     
     await broadcastSchema();
@@ -49,7 +54,7 @@ async function broadcastSchema() {
     const tablesResult = await conn.query(`
       SELECT table_name, column_name, data_type
       FROM information_schema.columns
-      WHERE table_schema = 'main'
+      WHERE table_schema = '${activeDbName}'
       ORDER BY table_name, ordinal_position;
     `);
     
@@ -73,8 +78,8 @@ async function broadcastSchema() {
     postMessage({
       type: "SCHEMA_UPDATE",
       schema,
-      databases: ["DuckDB In-Memory"],
-      activeDb: "DuckDB In-Memory",
+      databases: Array.from(databases),
+      activeDb: activeDbName,
     });
   } catch (err) {
     console.error("❌ DuckDB Schema Fetch Error:", err);
@@ -82,7 +87,27 @@ async function broadcastSchema() {
 }
 
 self.onmessage = async (event) => {
-  const { action, sql, isPlan, cleanSql, isSelectQuery, file, tableName } = event.data;
+  const { action, sql, dbName, isPlan, cleanSql, isSelectQuery, file, tableName } = event.data;
+
+  if (action === "SWITCH_DB") {
+    try {
+      if (!conn) throw new Error("DuckDB not initialized yet");
+      activeDbName = dbName;
+      databases.add(activeDbName);
+      
+      await conn.query(`CREATE SCHEMA IF NOT EXISTS "${activeDbName}";`);
+      await conn.query(`SET schema = '${activeDbName}';`);
+      
+      await broadcastSchema();
+      
+      postMessage({
+        type: "INIT_SUCCESS",
+        message: `Switched to DuckDB Database: ${activeDbName}`,
+      });
+    } catch (error) {
+      postMessage({ type: "QUERY_ERROR", error: error.message });
+    }
+  }
 
   if (action === "BROADCAST_SCHEMA") {
     await broadcastSchema();
