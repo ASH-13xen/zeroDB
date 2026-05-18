@@ -58,6 +58,12 @@ const ChartVisualizer = ({ results }) => {
     return data;
   }, [chartData, dataLimit]);
 
+  const yDomain = useMemo(() => {
+    const min = yAxisLimitMin !== '' && !isNaN(Number(yAxisLimitMin)) ? Number(yAxisLimitMin) : 'auto';
+    const max = yAxisLimitMax !== '' && !isNaN(Number(yAxisLimitMax)) ? Number(yAxisLimitMax) : 'auto';
+    return [min, max];
+  }, [yAxisLimitMin, yAxisLimitMax]);
+
   if (!columns || columns.length === 0) {
     return <div className="p-4 text-zinc-500 italic">No data to visualize.</div>;
   }
@@ -84,13 +90,6 @@ const ChartVisualizer = ({ results }) => {
         alert('Failed to export image: ' + error);
       });
   };
-
-  // Determine Y Domain
-  const yDomain = useMemo(() => {
-    const min = yAxisLimitMin !== '' && !isNaN(Number(yAxisLimitMin)) ? Number(yAxisLimitMin) : 'auto';
-    const max = yAxisLimitMax !== '' && !isNaN(Number(yAxisLimitMax)) ? Number(yAxisLimitMax) : 'auto';
-    return [min, max];
-  }, [yAxisLimitMin, yAxisLimitMax]);
 
   // Render the selected chart based on chartType
   const renderChart = () => {

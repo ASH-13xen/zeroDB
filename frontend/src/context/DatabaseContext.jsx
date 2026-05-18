@@ -38,6 +38,7 @@ export const DatabaseProvider = ({ children }) => {
     // If we're not in olap mode, we always fallback to sqlite worker for local operations
     return executionMode === "olap" ? duckdbWorkerRef.current : sqliteWorkerRef.current;
   }, [executionMode]);
+  const exportResolveRef = useRef(null);
 
   useEffect(() => {
     sqliteWorkerRef.current = new Worker(
@@ -75,7 +76,6 @@ export const DatabaseProvider = ({ children }) => {
         activeDb: currentDb,
         isPlan,
         executionTime: exTime,
-        memoryUsage: memUsage,
       } = event.data;
 
       switch (type) {
@@ -185,6 +185,16 @@ export const DatabaseProvider = ({ children }) => {
             setResults(null);
           }
           break;
+        case "EXPORT_SUCCESS":
+          if (exportResolveRef.current) {
+            exportResolveRef.current(event.data);
+            exportResolveRef.current = null;
+          }
+          break;
+        case "IMPORT_SUCCESS":
+          setIsReady(true);
+          console.log("✅", event.data.message);
+          break;
         default:
           console.warn("Unknown message from worker:", event.data);
       }
@@ -197,10 +207,11 @@ export const DatabaseProvider = ({ children }) => {
       sqliteWorkerRef.current?.terminate();
       duckdbWorkerRef.current?.terminate();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [executionMode]);
 
-  const [postgresUri, setPostgresUri] = useState("");
   
+
   // SQL Time-Travel Debugging State
   const [snapshots, setSnapshots] = useState([]);
   const [currentSnapshotIndex, setCurrentSnapshotIndex] = useState(-1);
@@ -337,6 +348,7 @@ export const DatabaseProvider = ({ children }) => {
 
       activeWorker.postMessage({ action: "EXECUTE", sql: sqlString, isSelectQuery, cleanSql });
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [isReady, executionMode],
   );
 
@@ -370,6 +382,7 @@ export const DatabaseProvider = ({ children }) => {
         isPlan: true,
       });
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [isReady, executionMode],
   );
 
@@ -416,6 +429,50 @@ export const DatabaseProvider = ({ children }) => {
     });
   }, [executionMode]);
 
+  const exportAndShareDatabase = useCallback(async (mode) => {
+    if (!sqliteWorkerRef.current || executionMode !== "draft") return;
+    
+    // 1. Get the bytes from worker
+    const { dbBytes, dbName } = await new Promise((resolve, reject) => {
+      exportResolveRef.current = resolve;
+      sqliteWorkerRef.current.postMessage({ action: "EXPORT_ACTIVE_DB" });
+      setTimeout(() => reject(new Error("Export timed out")), 5000);
+    });
+
+    // 2. Create FormData
+    const formData = new FormData();
+    const blob = new Blob([dbBytes], { type: "application/octet-stream" });
+    formData.append("databaseFile", blob, dbName);
+    formData.append("dbName", dbName);
+    formData.append("mode", mode);
+
+    // 3. Upload to backend
+    const { default: api } = await import("../services/api");
+    const response = await api.post("/share/upload", formData);
+    return response.data;
+  }, [executionMode]);
+
+  const importSharedDatabase = useCallback(async (shareId) => {
+    if (!sqliteWorkerRef.current) return;
+    
+    setIsReady(false);
+    
+    // 1. Download from backend as Blob/ArrayBuffer
+    const { default: api } = await import("../services/api");
+    const response = await api.get(`/share/${shareId}`, { responseType: "arraybuffer" });
+    
+    const dbName = response.headers["x-database-name"] || `imported_${Date.now()}.sqlite`;
+    
+    // 2. Send bytes to worker to initialize
+    sqliteWorkerRef.current.postMessage({
+      action: "IMPORT_DB_BYTES",
+      dbName,
+      dbBytes: response.data,
+    });
+    
+    localStorage.setItem("zeroDB_active_db", dbName);
+  }, []);
+
   return (
     <DatabaseContext.Provider
       value={{
@@ -450,6 +507,9 @@ export const DatabaseProvider = ({ children }) => {
         restoreSnapshot,
         commitRevert,
         finalizeBaseline,
+        // Sharing
+        exportAndShareDatabase,
+        importSharedDatabase,
       }}
     >
       {children}

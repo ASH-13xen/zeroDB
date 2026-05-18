@@ -22,7 +22,7 @@ export default function SettingsModal({ isOpen, onClose, executionMode, setExecu
     try {
       await api.post("/db/postgres-uri", { uri: postgresUri });
       setMessage("PostgreSQL URI saved successfully.");
-    } catch (error) {
+    } catch {
       setMessage("Failed to save URI.");
     } finally {
       setIsSaving(false);

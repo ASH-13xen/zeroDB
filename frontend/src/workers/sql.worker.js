@@ -283,6 +283,67 @@ self.onmessage = async (event) => {
     }
   }
 
+  // --- NEW: Export & Import Handlers for Sharing ---
+  if (action === "EXPORT_ACTIVE_DB") {
+    if (db) {
+      const currentBytes = db.export();
+      postMessage({
+        type: "EXPORT_SUCCESS",
+        dbBytes: currentBytes,
+        dbName: activeDbName,
+      });
+    } else {
+      postMessage({ type: "QUERY_ERROR", error: "No active database to export." });
+    }
+  }
+
+  if (action === "IMPORT_DB_BYTES") {
+    const { dbName, dbBytes } = event.data;
+    try {
+      if (!SQL) {
+        SQL = await initSqlJs({ locateFile: () => wasmUrl });
+      }
+
+      // Save current DB before switching
+      if (db) {
+        await persistToDisk();
+        db.close();
+      }
+
+      activeDbName = dbName.endsWith(".sqlite") ? dbName : `${dbName}.sqlite`;
+      const root = await navigator.storage.getDirectory();
+      
+      // Create and save the imported bytes directly to OPFS
+      const fileHandle = await root.getFileHandle(activeDbName, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(new Uint8Array(dbBytes));
+      await writable.close();
+
+      // Now load it into memory
+      db = new SQL.Database(new Uint8Array(dbBytes));
+      
+      // Initialize baseline snapshot
+      dbSnapshots = [{
+        id: 0,
+        timestamp: Date.now(),
+        query: "Imported Database State",
+        dbBytes: db.export()
+      }];
+      currentSnapshotIndex = 0;
+      broadcastSnapshots();
+
+      await broadcastSchema();
+      
+      postMessage({
+        type: "IMPORT_SUCCESS",
+        message: `Successfully imported and connected to ${activeDbName}`,
+      });
+    } catch (err) {
+      postMessage({ type: "QUERY_ERROR", error: "Failed to import database: " + err.message });
+    }
+  }
+  // ------------------------------------------------
+
   if (action === "EXECUTE") {
     try {
       const startTime = performance.now();

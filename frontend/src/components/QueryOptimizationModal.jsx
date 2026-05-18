@@ -18,6 +18,7 @@ export default function QueryOptimizationModal({
     if (isOpen && query) {
       handleGetOptimization();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, query]);
 
   const handleGetOptimization = async () => {

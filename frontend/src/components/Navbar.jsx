@@ -11,7 +11,7 @@ import SettingsModal from "./SettingsModal";
 
 const Navbar = () => {
   const { user, loginWithGoogle, logout } = useAuth();
-  const { executeSql, getExecutionPlan, query, setQuery, schema, queryPlan, setQueryPlan, executionMode, setExecutionMode } = useDatabaseContext();
+  const { executeSql, getExecutionPlan, query, setQuery, schema, queryPlan, executionMode, setExecutionMode } = useDatabaseContext();
   const [isToolsOpen, setIsToolsOpen] = useState(false);
   const [isOptimizerOpen, setIsOptimizerOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useDatabaseContext } from "../context/DatabaseContext";
 
 export default function DatabaseExplorer({
   schema = [],
@@ -8,9 +9,21 @@ export default function DatabaseExplorer({
   onSwitchDb,
   onDeleteDb,
 }) {
+  const { exportAndShareDatabase, importSharedDatabase, executionMode } = useDatabaseContext();
+
   const [newDbName, setNewDbName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
-
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareMode, setShareMode] = useState("private");
+  const [shareLink, setShareLink] = useState("");
+  const [isSharing, setIsSharing] = useState(false);
+  
+  // NEW: Import Modal State
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importInputValue, setImportInputValue] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
+  const [importStatus, setImportStatus] = useState(null); // { type: 'success' | 'error', message: '' }
+  
   // NEW: State to track which tables are expanded (showing columns)
   const [expandedTables, setExpandedTables] = useState({});
 
@@ -44,6 +57,53 @@ export default function DatabaseExplorer({
     }
   };
 
+  const handleShare = async () => {
+    try {
+      setIsSharing(true);
+      setShareLink("");
+      const result = await exportAndShareDatabase(shareMode);
+      // Assuming your site is running on current origin
+      setShareLink(window.location.origin + "/workspace?importDb=" + result.shareId);
+    } catch (err) {
+      console.error(err);
+      // We can also add shareStatus if we wanted, but the user specifically asked for import error handling
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const handleImportSubmit = async () => {
+    if (!importInputValue.trim()) return;
+    setImportStatus(null);
+    
+    // Extract ID if they pasted a full URL
+    let shareId = importInputValue.trim();
+    try {
+      if (shareId.startsWith("http")) {
+        const url = new URL(shareId);
+        shareId = url.searchParams.get("importDb") || shareId;
+      }
+    } catch {
+      // Not a valid URL, assume it's just the ID
+    }
+
+    try {
+      setIsImporting(true);
+      await importSharedDatabase(shareId);
+      setImportStatus({ type: "success", message: "Database imported successfully!" });
+      setTimeout(() => {
+        setImportModalOpen(false);
+        setImportInputValue("");
+        setImportStatus(null);
+      }, 1500);
+    } catch (err) {
+      const errorMsg = err.response?.data?.error || err.message;
+      setImportStatus({ type: "error", message: errorMsg });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col w-full text-sm">
       {/* 1. Database Selector Area */}
@@ -64,6 +124,26 @@ export default function DatabaseExplorer({
               </option>
             ))}
           </select>
+          
+          {executionMode === "draft" && (
+            <>
+              <button
+                onClick={() => setShareModalOpen(true)}
+                title="Share Database"
+                className="px-2.5 flex items-center justify-center border border-indigo-900/50 bg-indigo-900/20 text-indigo-400 hover:bg-indigo-900/40 rounded transition-colors"
+              >
+                🔗
+              </button>
+              
+              <button
+                onClick={() => setImportModalOpen(true)}
+                title="Import Database from Link"
+                className="px-2.5 flex items-center justify-center border border-emerald-900/50 bg-emerald-900/20 text-emerald-400 hover:bg-emerald-900/40 rounded transition-colors"
+              >
+                📥
+              </button>
+            </>
+          )}
 
           <button
             onClick={handleDelete}
@@ -161,6 +241,87 @@ export default function DatabaseExplorer({
           </ul>
         )}
       </div>
+
+      {/* Share Modal */}
+      {shareModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-6 w-full max-w-sm flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-white">Share Database</h3>
+              <button onClick={() => { setShareModalOpen(false); setShareLink(""); }} className="text-zinc-500 hover:text-white">✕</button>
+            </div>
+            
+            <p className="text-xs text-zinc-400 mb-4">Generate a link to share a snapshot of <strong>{activeDb}</strong> with another device.</p>
+            
+            <div className="mb-4 space-y-2">
+              <label className="flex items-center gap-2 text-sm text-zinc-300">
+                <input type="radio" value="private" checked={shareMode === "private"} onChange={(e)=>setShareMode(e.target.value)} />
+                Private (Only you can open)
+              </label>
+              <label className="flex items-center gap-2 text-sm text-zinc-300">
+                <input type="radio" value="public" checked={shareMode === "public"} onChange={(e)=>setShareMode(e.target.value)} />
+                Public (Anyone with link)
+              </label>
+            </div>
+
+            {shareLink ? (
+              <div className="mb-4">
+                <label className="text-xs text-emerald-400 font-bold mb-1 block">Link Generated (Valid for 24h)</label>
+                <input type="text" readOnly value={shareLink} className="w-full bg-zinc-950 border border-zinc-700 text-zinc-300 rounded px-3 py-2 text-xs outline-none" onClick={(e) => e.target.select()} />
+              </div>
+            ) : null}
+
+            <button
+              onClick={handleShare}
+              disabled={isSharing}
+              className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded transition-colors disabled:opacity-50"
+            >
+              {isSharing ? "Generating..." : "Generate Share Link"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Import Modal */}
+      {importModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-6 w-full max-w-sm flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-white">Import Database</h3>
+              <button onClick={() => { setImportModalOpen(false); setImportInputValue(""); setImportStatus(null); }} className="text-zinc-500 hover:text-white">✕</button>
+            </div>
+            
+            <p className="text-xs text-zinc-400 mb-4">Paste a ZeroDB share link or Share ID to import it into your local workspace. <br/><br/><span className="text-amber-500">Warning: If a database with the imported name already exists, it will be overwritten.</span></p>
+            
+            <div className="mb-4">
+              <input 
+                autoFocus
+                type="text" 
+                placeholder="https://... or Share ID"
+                value={importInputValue} 
+                onChange={(e) => setImportInputValue(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-700 text-zinc-300 rounded px-3 py-2 text-xs outline-none focus:border-emerald-500" 
+              />
+            </div>
+
+            {importStatus && (
+              <div className={`mb-4 p-2 rounded text-xs font-semibold flex items-center gap-2 ${
+                importStatus.type === 'error' ? 'bg-rose-900/20 text-rose-400 border border-rose-900/50' : 'bg-emerald-900/20 text-emerald-400 border border-emerald-900/50'
+              }`}>
+                {importStatus.type === 'error' ? '❌' : '✅'} {importStatus.message}
+              </div>
+            )}
+
+            <button
+              onClick={handleImportSubmit}
+              disabled={isImporting || !importInputValue.trim()}
+              className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded transition-colors disabled:opacity-50"
+            >
+              {isImporting ? "Importing..." : "Import Database"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

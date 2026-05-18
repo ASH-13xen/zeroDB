@@ -11,12 +11,7 @@ export default function TimelineSlider({
   const [isPlaying, setIsPlaying] = useState(false);
   const autoplayTimer = useRef(null);
 
-  // Stop playing if we reach the end
-  useEffect(() => {
-    if (isPlaying && currentSnapshotIndex >= snapshots.length - 1) {
-      setIsPlaying(false);
-    }
-  }, [currentSnapshotIndex, snapshots.length, isPlaying]);
+
 
   // Handle Autoplay Interval
   useEffect(() => {
