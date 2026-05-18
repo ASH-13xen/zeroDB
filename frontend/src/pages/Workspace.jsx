@@ -10,6 +10,7 @@ import DatabaseExplorer from "../components/DatabaseExplorer";
 import QueryHistory from "../components/QueryHistory";
 import TimelineSlider from "../components/TimelineSlider";
 import { useAuth } from "../context/AuthContext";
+import { useCollab } from "../context/CollabContext";
 
 const Workspace = () => {
   // 1. Consume Shared Database & Editor State from Context
@@ -37,6 +38,7 @@ const Workspace = () => {
     importSharedDatabase,
   } = useDatabase();
   const { user } = useAuth();
+  const { joinCollabSession, activeRoomId } = useCollab();
 
   // 2. State to hold the SQL code in the editor
   // Removed local query state as it's now managed by useDatabase context
@@ -143,20 +145,42 @@ const Workspace = () => {
 
   // NEW: Handle Import Shared DB from URL
   const hasPromptedImport = useRef(false);
+  const hasJoinedCollab = useRef(false);
+
+  // Auto-join collaborative room if URL parameters exist on page load
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const room = params.get("room");
+    const importDb = params.get("importDb");
+    
+    if (room && !activeRoomId && !hasJoinedCollab.current) {
+      hasJoinedCollab.current = true;
+      
+      console.log(`🔗 Joining collaborative session room: ${room}`);
+      joinCollabSession(room, importDb)
+        .then(() => {
+          console.log("🔗 Collaborative room joined!");
+        })
+        .catch((err) => {
+          console.error("Failed to auto-join collaborative room", err);
+          alert("Failed to join collaborative session: " + err.message);
+        });
+    }
+  }, [joinCollabSession, activeRoomId]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const shareId = params.get("importDb");
+    const room = params.get("room");
     
-    if (shareId && !hasPromptedImport.current) {
+    // Standard static database import (only run if not part of a socket collaborative room link)
+    if (shareId && !room && !hasPromptedImport.current) {
       hasPromptedImport.current = true;
       
       const confirmImport = window.confirm(
         "You are about to import a shared database. If a local database with the same name exists, it will be overwritten. Do you want to proceed?"
       );
       
-      // Remove the parameter from the URL synchronously so it doesn't trigger again
-      // even if React StrictMode unmounts/remounts before the promise resolves.
       window.history.replaceState({}, document.title, window.location.pathname);
       
       if (confirmImport) {

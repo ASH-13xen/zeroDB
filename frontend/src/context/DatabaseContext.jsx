@@ -244,6 +244,12 @@ export const DatabaseProvider = ({ children }) => {
     }
   }, [executionMode]);
   
+  // Query execution listener for multiplayer rooms
+  const queryListenerRef = useRef(null);
+  const registerQueryListener = useCallback((callback) => {
+    queryListenerRef.current = callback;
+  }, []);
+
   // LRU Cache
   const lruCache = useRef(new Map());
   const MAX_CACHE_SIZE = 20;
@@ -253,7 +259,11 @@ export const DatabaseProvider = ({ children }) => {
   }, [executionMode, activeDb]);
 
   const executeSql = useCallback(
-    async (sqlString) => {
+    async (sqlString, isReplicated = false) => {
+      if (queryListenerRef.current) {
+        queryListenerRef.current(sqlString, isReplicated);
+      }
+
       const cleanSql = sqlString.trim();
       const isSelectQuery = /^SELECT/i.test(cleanSql);
       const isWriteQuery = /CREATE|INSERT|UPDATE|DELETE|DROP|ALTER/i.test(cleanSql);
@@ -485,6 +495,12 @@ export const DatabaseProvider = ({ children }) => {
     localStorage.setItem("zeroDB_active_db", dbName);
   }, []);
 
+  const saveActiveDbAs = useCallback((newDbName) => {
+    if (!sqliteWorkerRef.current) return;
+    setIsReady(false);
+    sqliteWorkerRef.current.postMessage({ action: "SAVE_DB_AS", newDbName });
+  }, []);
+
   return (
     <DatabaseContext.Provider
       value={{
@@ -522,6 +538,9 @@ export const DatabaseProvider = ({ children }) => {
         // Sharing
         exportAndShareDatabase,
         importSharedDatabase,
+        saveActiveDbAs,
+        // Collaboration
+        registerQueryListener,
       }}
     >
       {children}
