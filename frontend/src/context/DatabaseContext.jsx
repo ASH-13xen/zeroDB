@@ -26,23 +26,44 @@ export const DatabaseProvider = ({ children }) => {
 
   const [executionTime, setExecutionTime] = useState(null);
   const [memoryUsage, setMemoryUsage] = useState(null);
+  const [executionMode, setExecutionMode] = useState(() => {
+    return localStorage.getItem("zeroDB_execution_mode") || "draft";
+  }); // "draft" or "production" or "olap"
 
-  const workerRef = useRef(null);
+  const sqliteWorkerRef = useRef(null);
+  const duckdbWorkerRef = useRef(null);
   const lastSelectQueryRef = useRef("");
+  
+  const getActiveWorker = useCallback(() => {
+    // If we're not in olap mode, we always fallback to sqlite worker for local operations
+    return executionMode === "olap" ? duckdbWorkerRef.current : sqliteWorkerRef.current;
+  }, [executionMode]);
 
   useEffect(() => {
-    workerRef.current = new Worker(
+    sqliteWorkerRef.current = new Worker(
       new URL("../workers/sql.worker.js", import.meta.url),
       { type: "module" },
     );
+    
+    duckdbWorkerRef.current = new Worker(
+      new URL("../workers/duckdb.worker.js", import.meta.url),
+      { type: "module" },
+    );
 
-    // Boot the last active database if it's not the default
+    // Boot the last active database if it's not the default (for SQLite)
     const savedDb = localStorage.getItem("zeroDB_active_db");
     if (savedDb && savedDb !== "test.sqlite") {
-      workerRef.current.postMessage({ action: "SWITCH_DB", dbName: savedDb });
+      sqliteWorkerRef.current.postMessage({ action: "SWITCH_DB", dbName: savedDb });
     }
 
-    workerRef.current.onmessage = (event) => {
+    const createWorkerMessageHandler = (workerSource) => (event) => {
+      // Ignore UI updates from background workers
+      const isActiveWorker = 
+        (executionMode === "olap" && workerSource === duckdbWorkerRef.current) ||
+        (executionMode === "draft" && workerSource === sqliteWorkerRef.current);
+
+      if (event.data.type !== "INIT_SUCCESS" && !isActiveWorker) return;
+
       // Destructure everything including your new DB tracking payloads
       const {
         type,
@@ -61,6 +82,23 @@ export const DatabaseProvider = ({ children }) => {
         case "INIT_SUCCESS":
           console.log("✅", message);
           setIsReady(true);
+          break;
+        case "FILE_REGISTER_SUCCESS":
+          console.log("✅ File registered successfully:", event.data.fileName);
+          if (event.data.tableName) {
+            const autoSql = `SELECT * FROM ${event.data.tableName} LIMIT 100;`;
+            setQuery(autoSql);
+            const activeWorker = executionMode === "olap" ? duckdbWorkerRef.current : sqliteWorkerRef.current;
+            activeWorker?.postMessage({
+              action: "EXECUTE",
+              sql: autoSql,
+              isSelectQuery: true,
+              cleanSql: autoSql
+            });
+            // We keep it executing for the follow-up SELECT query
+          } else {
+            setIsExecuting(false);
+          }
           break;
         case "QUERY_SUCCESS":
           if (isPlan) {
@@ -136,7 +174,8 @@ export const DatabaseProvider = ({ children }) => {
             const lastQuery = lastSelectQueryRef.current;
             setIsExecuting(true);
             setError(null);
-            workerRef.current?.postMessage({
+            const activeWorker = executionMode === "olap" ? duckdbWorkerRef.current : sqliteWorkerRef.current;
+            activeWorker?.postMessage({
               action: "EXECUTE",
               sql: lastQuery,
               isSelectQuery: true,
@@ -151,14 +190,15 @@ export const DatabaseProvider = ({ children }) => {
       }
     };
 
-    return () => {
-      workerRef.current?.terminate();
-    };
-  }, []);
+    sqliteWorkerRef.current.onmessage = createWorkerMessageHandler(sqliteWorkerRef.current);
+    duckdbWorkerRef.current.onmessage = createWorkerMessageHandler(duckdbWorkerRef.current);
 
-  const [executionMode, setExecutionMode] = useState(() => {
-    return localStorage.getItem("zeroDB_execution_mode") || "draft";
-  }); // "draft" or "production"
+    return () => {
+      sqliteWorkerRef.current?.terminate();
+      duckdbWorkerRef.current?.terminate();
+    };
+  }, [executionMode]);
+
   const [postgresUri, setPostgresUri] = useState("");
   
   // SQL Time-Travel Debugging State
@@ -182,7 +222,8 @@ export const DatabaseProvider = ({ children }) => {
         });
       });
     } else {
-      workerRef.current?.postMessage({ action: "BROADCAST_SCHEMA" });
+      const activeWorker = executionMode === "olap" ? duckdbWorkerRef.current : sqliteWorkerRef.current;
+      activeWorker?.postMessage({ action: "BROADCAST_SCHEMA" });
     }
   }, [executionMode]);
   
@@ -287,13 +328,14 @@ export const DatabaseProvider = ({ children }) => {
         return;
       }
 
-      if (!workerRef.current || !isReady) {
+      const activeWorker = getActiveWorker();
+      if (!activeWorker || !isReady) {
         setError("zeroDB Engine is still spinning up...");
         setIsExecuting(false);
         return;
       }
 
-      workerRef.current.postMessage({ action: "EXECUTE", sql: sqlString, isSelectQuery, cleanSql });
+      activeWorker.postMessage({ action: "EXECUTE", sql: sqlString, isSelectQuery, cleanSql });
     },
     [isReady, executionMode],
   );
@@ -316,12 +358,13 @@ export const DatabaseProvider = ({ children }) => {
         return;
       }
 
-      if (!workerRef.current || !isReady) {
+      const activeWorker = getActiveWorker();
+      if (!activeWorker || !isReady) {
         setIsExecuting(false);
         return;
       }
       
-      workerRef.current.postMessage({
+      activeWorker.postMessage({
         action: "EXECUTE",
         sql: `EXPLAIN QUERY PLAN ${sqlString}`,
         isPlan: true,
@@ -332,32 +375,46 @@ export const DatabaseProvider = ({ children }) => {
 
   // Your new DB control functions
   const switchDb = useCallback((dbName) => {
-    if (!workerRef.current) return;
+    if (!sqliteWorkerRef.current) return;
     setIsReady(false);
     setResults(null);
     localStorage.setItem("zeroDB_active_db", dbName);
-    workerRef.current.postMessage({ action: "SWITCH_DB", dbName });
+    sqliteWorkerRef.current.postMessage({ action: "SWITCH_DB", dbName });
   }, []);
 
   const deleteDb = useCallback((dbName) => {
-    if (!workerRef.current) return;
-    workerRef.current.postMessage({ action: "DELETE_DB", dbName });
+    if (!sqliteWorkerRef.current) return;
+    sqliteWorkerRef.current.postMessage({ action: "DELETE_DB", dbName });
   }, []);
 
   const restoreSnapshot = useCallback((index) => {
-    if (!workerRef.current) return;
-    workerRef.current.postMessage({ action: "RESTORE_SNAPSHOT", index });
+    if (!sqliteWorkerRef.current) return;
+    sqliteWorkerRef.current.postMessage({ action: "RESTORE_SNAPSHOT", index });
   }, []);
 
   const commitRevert = useCallback((index) => {
-    if (!workerRef.current) return;
-    workerRef.current.postMessage({ action: "COMMIT_REVERT", index });
+    if (!sqliteWorkerRef.current) return;
+    sqliteWorkerRef.current.postMessage({ action: "COMMIT_REVERT", index });
   }, []);
 
   const finalizeBaseline = useCallback(() => {
-    if (!workerRef.current) return;
-    workerRef.current.postMessage({ action: "FINALIZE_BASELINE" });
+    if (!sqliteWorkerRef.current) return;
+    sqliteWorkerRef.current.postMessage({ action: "FINALIZE_BASELINE" });
   }, []);
+  
+  const registerFileForOlap = useCallback((file, tableName) => {
+    if (executionMode !== "olap") {
+        console.warn("Cannot register file directly unless in OLAP mode.");
+        return;
+    }
+    setIsExecuting(true);
+    setError(null);
+    duckdbWorkerRef.current?.postMessage({
+        action: "REGISTER_FILE",
+        file,
+        tableName
+    });
+  }, [executionMode]);
 
   return (
     <DatabaseContext.Provider
@@ -386,6 +443,7 @@ export const DatabaseProvider = ({ children }) => {
         memoryUsage,
         executionMode,
         setExecutionMode,
+        registerFileForOlap,
         // Time Travel
         snapshots,
         currentSnapshotIndex,

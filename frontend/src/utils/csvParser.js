@@ -71,48 +71,49 @@ export function processCsvToSql(file, tableName) {
                 // We'll add IF NOT EXISTS in case they upload the same thing twice.
                 const createTableSql = `CREATE TABLE IF NOT EXISTS "${tableName}" (\n    ${columnDefinitions.join(",\n    ")}\n);\n`;
 
-                // 3. Generate INSERT statements
-                // If there are thousands of rows, single inserts are slow. 
-                // We'll bundle them into multi-value inserts or a transaction of single inserts.
-                // For simplicity and raw string passing to `executeSql`, we'll do single INSERTs.
-                // SQLite supports multi-value inserts, but doing it in a batch might be safer.
+                // 3. Generate INSERT statements in batches
+                // SQLite is extremely slow if we do 100k individual inserts outside a transaction.
+                // We will wrap them in a transaction and use multi-value inserts.
+                const batchSize = 500;
+                const insertStatements = [];
                 
-                const insertStatements = data.map(row => {
-                    // Extract values in the same order as columns
-                    const values = columns.map(col => {
-                        let val = row[col];
-                        
-                        // Handle nulls/empty
-                        if (val === null || val === undefined) {
-                            return "NULL";
-                        }
-                        
-                        val = String(val).trim();
-                        if (val === "") {
-                             return "NULL";
-                        }
+                for (let i = 0; i < data.length; i += batchSize) {
+                    const batch = data.slice(i, i + batchSize);
+                    
+                    const valuesStrings = batch.map(row => {
+                        const values = columns.map(col => {
+                            let val = row[col];
+                            
+                            if (val === null || val === undefined) return "NULL";
+                            
+                            val = String(val).trim();
+                            if (val === "") return "NULL";
 
-                        // We need to type-check to know whether to wrap in single quotes
-                        const type = inferSqlType(data[0][col]); // use same inferred type
-                        
-                        if (type === "INTEGER" || type === "REAL" || type === "BOOLEAN") {
-                             // E.g. boolean TRUE goes as TRUE in SQL or 1.
-                             if (type === "BOOLEAN") {
-                                 return val.toLowerCase() === "true" ? "1" : "0"; // SQLite prefers 1/0 for bools
-                             }
-                             return val; // unquoted
-                        } else {
-                            // Escape single quotes by doubling them for SQL strings
-                            const escapedStr = val.replace(/'/g, "''");
-                            return `'${escapedStr}'`;
-                        }
+                            const type = inferSqlType(data[0][col]);
+                            
+                            if (type === "INTEGER" || type === "REAL" || type === "BOOLEAN") {
+                                 if (type === "BOOLEAN") {
+                                     return val.toLowerCase() === "true" ? "1" : "0";
+                                 }
+                                 // If it was inferred as number but this specific row has text (e.g. "Calib."), quote it!
+                                 if (isNaN(Number(val))) {
+                                     const escapedStr = val.replace(/'/g, "''");
+                                     return `'${escapedStr}'`;
+                                 }
+                                 return val; // unquoted number
+                            } else {
+                                const escapedStr = val.replace(/'/g, "''");
+                                return `'${escapedStr}'`;
+                            }
+                        });
+                        return `(${values.join(", ")})`;
                     });
-
-                    return `INSERT INTO "${tableName}" ("${columns.join('", "')}") VALUES (${values.join(", ")});`;
-                });
+                    
+                    insertStatements.push(`INSERT INTO "${tableName}" ("${columns.join('", "')}") VALUES ${valuesStrings.join(", ")};`);
+                }
 
                 // Combine them all together
-                const finalSqlString = `${createTableSql}\n${insertStatements.join("\n")}`;
+                const finalSqlString = `${createTableSql}\nBEGIN TRANSACTION;\n${insertStatements.join("\n")}\nCOMMIT;`;
                 
                 resolve(finalSqlString);
             },
