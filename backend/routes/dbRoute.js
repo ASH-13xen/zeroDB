@@ -1,5 +1,5 @@
 import express from "express";
-import { protect } from "../middlewares/authmiddleware.js";
+import { protect } from "../middlewares/authMiddleware.js";
 import { savePostgresUri, getPostgresUri, executePostgresQuery, getPostgresSchema } from "../controllers/dbController.js";
 
 const router = express.Router();

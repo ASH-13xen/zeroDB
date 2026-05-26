@@ -1,5 +1,5 @@
 import express from "express";
-import { protect } from "../middlewares/authmiddleware.js";
+import { protect } from "../middlewares/authMiddleware.js";
 import { addQueryHistory, getQueryHistory, clearQueryHistory } from "../controllers/historyController.js";
 
 const router = express.Router();

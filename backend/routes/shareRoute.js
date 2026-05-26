@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import path from "path";
 import fs from "fs";
 import { uploadDatabase, downloadDatabase } from "../controllers/shareController.js";
-import { protect } from "../middlewares/authmiddleware.js";
+import { protect } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
