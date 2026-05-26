@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { MessageSquare, Loader2, Database } from "lucide-react";
+import api from "../services/api";
 
 export default function AiQueryGenerator({ currentSchema, onQueryGenerated }) {
     const [prompt, setPrompt] = useState("");
@@ -23,24 +24,11 @@ export default function AiQueryGenerator({ currentSchema, onQueryGenerated }) {
         setError("");
 
         try {
-            // Provide a complete path in a real app, assuming vite proxy or full URL
-            const response = await fetch("http://localhost:5000/api/ai/generate-query", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ 
-                    schema: currentSchema,
-                    prompt: prompt
-                })
+            const res = await api.post("/ai/generate-query", { 
+                schema: currentSchema,
+                prompt: prompt
             });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                // Surface the detailed Gemini API error if available (e.g. Rate Limits)
-                throw new Error(data.details || data.error || "Failed to generate SQL query");
-            }
+            const data = res.data;
 
             if (data.query && onQueryGenerated) {
                 // Pass the generated SQL string back up so it can be placed in the editor
@@ -52,7 +40,8 @@ export default function AiQueryGenerator({ currentSchema, onQueryGenerated }) {
 
         } catch (err) {
             console.error("AI Generation Error:", err);
-            setError(err.message);
+            const errMsg = err.response?.data?.error || err.response?.data?.details || err.message;
+            setError(errMsg);
             setTimeout(() => setError(""), 4000);
         } finally {
             setIsLoading(false);

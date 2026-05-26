@@ -32,7 +32,6 @@ const io = new Server(server, {
 });
 
 app.use(cors());
-app.use(express.json());
 
 // Set up express app context bindings so controllers can push real-time alerts
 const userSockets = new Map(); // userId (string) -> socket.id (string)

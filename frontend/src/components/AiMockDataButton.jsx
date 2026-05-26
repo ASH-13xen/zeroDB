@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Sparkles, Loader2, Database } from "lucide-react";
+import api from "../services/api";
 
 export default function AiMockDataButton({ currentSchema, onExecuteSql }) {
     const [isLoading, setIsLoading] = useState(false);
@@ -16,20 +17,8 @@ export default function AiMockDataButton({ currentSchema, onExecuteSql }) {
         setError("");
 
         try {
-            // Provide a complete path in a real app, assuming vite proxy or full URL
-            const response = await fetch("http://localhost:5000/api/ai/mock-data", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ schema: currentSchema })
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || "Failed to generate mock data");
-            }
+            const res = await api.post("/ai/mock-data", { schema: currentSchema });
+            const data = res.data;
 
             if (data.sql && onExecuteSql) {
                 // Pass the raw SQL string (expected to be ~20 INSERT statements) to the engine
@@ -50,7 +39,8 @@ export default function AiMockDataButton({ currentSchema, onExecuteSql }) {
 
         } catch (err) {
             console.error("AI Generation Error:", err);
-            setError(err.message);
+            const errMsg = err.response?.data?.error || err.response?.data?.details || err.message;
+            setError(errMsg);
             setTimeout(() => setError(""), 4000);
         } finally {
             setIsLoading(false);
